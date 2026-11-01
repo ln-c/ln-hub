@@ -6,7 +6,8 @@
 //! shares its stem with a video in the same directory is that video's thumbnail and is hidden.
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::fs;
 use std::iter::Peekable;
 use std::path::{Path, PathBuf};
@@ -15,35 +16,132 @@ use std::str::Chars;
 const IMAGE_EXTS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif"];
 const VIDEO_EXTS: &[&str] = &["mp4", "webm", "mkv"];
 
-/// Display names of the wallpapers in `dir`. A missing or unreadable directory yields none.
-pub(crate) fn discover(dir: &Path) -> Vec<String> {
-    let (files, mut subdirs) = read_entries(dir);
-    let mut names = media_names(&files);
-
-    subdirs.sort_by(|a, b| natural_cmp(&a.0, &b.0));
-    for (sub, path) in &subdirs {
-        let (sub_files, _) = read_entries(path);
-        names.extend(
-            media_names(&sub_files)
-                .into_iter()
-                .map(|name| format!("{sub}/{name}")),
-        );
-    }
-    names
+/// A wallpaper file, with the paths the other slices need.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Wallpaper {
+    /// Display name: `x.png`, or `sub/x.png` one subdirectory level down.
+    pub(crate) name: String,
+    /// Absolute path to the file.
+    pub(crate) path: PathBuf,
+    pub(crate) kind: Kind,
+    /// For a video, the same-directory `.jpg` that shares its stem (hidden from the list).
+    pub(crate) thumb: Option<PathBuf>,
 }
 
-/// Splits the entries of `dir` into file names and `(name, path)` subdirectories.
-fn read_entries(dir: &Path) -> (Vec<String>, Vec<(String, PathBuf)>) {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Kind {
+    Image,
+    Video,
+}
+
+/// A subdirectory of the wallpaper directory.
+struct Subdir {
+    name: String,
+    path: PathBuf,
+}
+
+/// One file name, split once into the parts the listing compares.
+struct Classified<'a> {
+    name: &'a str,
+    stem: &'a str,
+    /// `None` for files that are not wallpapers, such as `doc.pdf`.
+    kind: Option<Kind>,
+    /// Whether the extension is `jpg`, the only image a video's thumbnail can be.
+    jpg: bool,
+}
+
+/// The wallpapers in `dir`, in display order. A missing or unreadable directory yields none.
+pub(crate) fn discover(dir: &Path) -> Vec<Wallpaper> {
+    let (files, mut subdirs) = split_entries(dir);
+    let mut wallpapers = list_media(dir, None, &files);
+
+    subdirs.sort_by(|a, b| natural_cmp(&a.name, &b.name));
+    for sub in &subdirs {
+        let files = file_names(&sub.path);
+        wallpapers.extend(list_media(&sub.path, Some(&sub.name), &files));
+    }
+    wallpapers
+}
+
+/// The wallpapers among `files`, the file names directly in `dir`, naturally sorted. `prefix` is
+/// the subdirectory name for files one level down, shown as `prefix/name`.
+fn list_media(dir: &Path, prefix: Option<&str>, files: &[String]) -> Vec<Wallpaper> {
+    let mut names: Vec<&str> = files.iter().map(String::as_str).collect();
+    names.sort_unstable();
+    let classified: Vec<Classified> = names.into_iter().map(classify).collect();
+
+    let video_stems: HashSet<&str> = classified
+        .iter()
+        .filter(|c| c.kind == Some(Kind::Video))
+        .map(|c| c.stem)
+        .collect();
+    // The first `.jpg` (in name order) per video stem is that video's thumbnail.
+    let mut thumbs: HashMap<&str, &str> = HashMap::new();
+    for c in classified
+        .iter()
+        .filter(|c| c.jpg && video_stems.contains(c.stem))
+    {
+        thumbs.entry(c.stem).or_insert(c.name);
+    }
+
+    let mut wallpapers: Vec<Wallpaper> = classified
+        .into_iter()
+        .filter_map(|c| {
+            let kind = c.kind?;
+            if c.jpg && video_stems.contains(c.stem) {
+                return None;
+            }
+            let thumb = match kind {
+                Kind::Video => thumbs.get(c.stem).map(|t| dir.join(t)),
+                Kind::Image => None,
+            };
+            Some(Wallpaper {
+                name: match prefix {
+                    Some(p) => format!("{p}/{}", c.name),
+                    None => c.name.to_owned(),
+                },
+                path: dir.join(c.name),
+                kind,
+                thumb,
+            })
+        })
+        .collect();
+    wallpapers.sort_by(|a, b| natural_cmp(&a.name, &b.name));
+    wallpapers
+}
+
+/// Splits one file name into its stem and extension, and classifies it by extension.
+fn classify(name: &str) -> Classified<'_> {
+    let path = Path::new(name);
+    let stem = path.file_stem().and_then(OsStr::to_str).unwrap_or("");
+    let ext = path.extension().and_then(OsStr::to_str).unwrap_or("");
+    Classified {
+        name,
+        stem,
+        kind: kind_of_ext(ext),
+        jpg: ext.eq_ignore_ascii_case("jpg"),
+    }
+}
+
+/// The kind of a file with extension `ext`, matched case-insensitively.
+fn kind_of_ext(ext: &str) -> Option<Kind> {
+    let in_list = |list: &[&str]| list.iter().any(|known| ext.eq_ignore_ascii_case(known));
+    if in_list(VIDEO_EXTS) {
+        Some(Kind::Video)
+    } else if in_list(IMAGE_EXTS) {
+        Some(Kind::Image)
+    } else {
+        None
+    }
+}
+
+/// The files and subdirectories directly in `dir`.
+fn split_entries(dir: &Path) -> (Vec<String>, Vec<Subdir>) {
     let mut files = Vec::new();
     let mut subdirs = Vec::new();
-    let Ok(entries) = fs::read_dir(dir) else {
-        return (files, subdirs);
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let name = entry.file_name().to_string_lossy().into_owned();
+    for (name, path) in dir_entries(dir) {
         if path.is_dir() {
-            subdirs.push((name, path));
+            subdirs.push(Subdir { name, path });
         } else if path.is_file() {
             files.push(name);
         }
@@ -51,51 +149,27 @@ fn read_entries(dir: &Path) -> (Vec<String>, Vec<(String, PathBuf)>) {
     (files, subdirs)
 }
 
-/// The wallpaper file names among `files` (one directory's listing), naturally sorted.
-fn media_names(files: &[String]) -> Vec<String> {
-    let video_stems: HashSet<String> = files
-        .iter()
-        .filter(|f| is_video(f))
-        .map(|f| stem(f))
-        .collect();
-    let mut names: Vec<String> = files
-        .iter()
-        .filter(|f| is_wallpaper(f, &video_stems))
-        .cloned()
-        .collect();
-    names.sort_by(|a, b| natural_cmp(a, b));
-    names
+/// The files directly in `dir`. Only `is_file` is checked, so subdirectories are skipped
+/// without the extra `is_dir` stat.
+fn file_names(dir: &Path) -> Vec<String> {
+    dir_entries(dir)
+        .filter(|(_, path)| path.is_file())
+        .map(|(name, _)| name)
+        .collect()
 }
 
-/// A video, or an image that is not the thumbnail of a video in the same directory.
-fn is_wallpaper(name: &str, video_stems: &HashSet<String>) -> bool {
-    let ext = extension(name);
-    if VIDEO_EXTS.contains(&ext.as_str()) {
-        return true;
-    }
-    if !IMAGE_EXTS.contains(&ext.as_str()) {
-        return false;
-    }
-    !(ext == "jpg" && video_stems.contains(&stem(name)))
-}
-
-fn is_video(name: &str) -> bool {
-    VIDEO_EXTS.contains(&extension(name).as_str())
-}
-
-/// Lowercased extension, or an empty string when there is none.
-fn extension(name: &str) -> String {
-    Path::new(name)
-        .extension()
-        .map(|e| e.to_string_lossy().to_ascii_lowercase())
-        .unwrap_or_default()
-}
-
-fn stem(name: &str) -> String {
-    Path::new(name)
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .unwrap_or_default()
+/// The `(name, path)` of each entry in `dir`. A missing or unreadable directory yields none.
+fn dir_entries(dir: &Path) -> impl Iterator<Item = (String, PathBuf)> {
+    fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|entry| {
+            (
+                entry.file_name().to_string_lossy().into_owned(),
+                entry.path(),
+            )
+        })
 }
 
 /// Orders names case-insensitively, with digit runs compared by value (`img2.png` before

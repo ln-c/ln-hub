@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::config::{Config, Module};
 use crate::system::System;
-use crate::wallpaper;
+use crate::wallpaper::{self, Wallpaper};
 
 /// Top-level application state: the module column, its selection, the Theme wallpaper list
 /// and the quit flag.
@@ -16,7 +16,7 @@ pub struct App {
     modules: Vec<Module>,
     quit_key: char,
     wallpaper_dir: PathBuf,
-    wallpapers: Vec<String>,
+    wallpapers: Vec<Wallpaper>,
     items_focused: bool,
     selected: usize,
     quit: bool,
@@ -80,7 +80,7 @@ impl App {
                 let rows: Vec<ListItem> = self
                     .wallpapers
                     .iter()
-                    .map(|w| ListItem::new(w.as_str()))
+                    .map(|w| ListItem::new(w.name.as_str()))
                     .collect();
                 f.render_widget(List::new(rows).block(items_block), items_area);
             }
