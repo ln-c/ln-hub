@@ -4,6 +4,7 @@
 //! from one subdirectory level as `subdir/name`. Names sort naturally and case-insensitively;
 //! subdirectories are taken in name order, each keeping its files together. A `.jpg` that
 //! shares its stem with a video in the same directory is that video's thumbnail and is hidden.
+//! Stems match case-sensitively; extensions match case-insensitively.
 
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -21,14 +22,14 @@ const VIDEO_EXTS: &[&str] = &["mp4", "webm", "mkv"];
 pub(crate) struct Wallpaper {
     /// Display name: `x.png`, or `sub/x.png` one subdirectory level down.
     pub(crate) name: String,
-    /// Absolute path to the file.
+    /// `dir.join(name)`; absolute when `wallpaper_dir` is.
     pub(crate) path: PathBuf,
     pub(crate) kind: Kind,
     /// For a video, the same-directory `.jpg` that shares its stem (hidden from the list).
     pub(crate) thumb: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
     Image,
     Video,
@@ -75,12 +76,10 @@ fn list_media(dir: &Path, prefix: Option<&str>, files: &[String]) -> Vec<Wallpap
         .filter(|c| c.kind == Some(Kind::Video))
         .map(|c| c.stem)
         .collect();
-    // The first `.jpg` (in name order) per video stem is that video's thumbnail.
+    let is_thumb = |c: &Classified| c.jpg && video_stems.contains(c.stem);
+    // The first `.jpg` (in byte order) per video stem is that video's thumbnail.
     let mut thumbs: HashMap<&str, &str> = HashMap::new();
-    for c in classified
-        .iter()
-        .filter(|c| c.jpg && video_stems.contains(c.stem))
-    {
+    for c in classified.iter().filter(|c| is_thumb(c)) {
         thumbs.entry(c.stem).or_insert(c.name);
     }
 
@@ -88,7 +87,7 @@ fn list_media(dir: &Path, prefix: Option<&str>, files: &[String]) -> Vec<Wallpap
         .into_iter()
         .filter_map(|c| {
             let kind = c.kind?;
-            if c.jpg && video_stems.contains(c.stem) {
+            if is_thumb(&c) {
                 return None;
             }
             let thumb = match kind {
@@ -159,16 +158,16 @@ fn file_names(dir: &Path) -> Vec<String> {
 }
 
 /// The `(name, path)` of each entry in `dir`. A missing or unreadable directory yields none.
+/// Names that are not valid UTF-8 are skipped.
 fn dir_entries(dir: &Path) -> impl Iterator<Item = (String, PathBuf)> {
     fs::read_dir(dir)
         .into_iter()
         .flatten()
         .flatten()
-        .map(|entry| {
-            (
-                entry.file_name().to_string_lossy().into_owned(),
-                entry.path(),
-            )
+        .filter_map(|entry| {
+            let path = entry.path();
+            let name = entry.file_name().into_string().ok()?;
+            Some((name, path))
         })
 }
 
