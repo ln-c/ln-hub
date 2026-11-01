@@ -2,8 +2,10 @@
 
 mod app;
 mod config;
+mod palette;
 mod system;
 
 pub use app::App;
 pub use config::{Config, Module};
+pub use palette::{Palette, PaletteError};
 pub use system::{JobId, JobState, System};
