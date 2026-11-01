@@ -38,6 +38,10 @@ pub struct Keymap {
 pub enum ConfigError {
     /// `modules` names a module that does not exist.
     UnknownModule(Box<str>),
+    /// `modules` is present but empty.
+    NoModules,
+    /// `modules` names the same module more than once.
+    DuplicateModule(Box<str>),
     /// A `[keymap]` value is not a single character.
     InvalidKey(String),
     /// The TOML text could not be parsed or has values of the wrong type.
@@ -48,6 +52,8 @@ impl fmt::Display for ConfigError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConfigError::UnknownModule(name) => write!(f, "unknown module: {name}"),
+            ConfigError::NoModules => write!(f, "modules must not be empty"),
+            ConfigError::DuplicateModule(name) => write!(f, "duplicate module: {name}"),
             ConfigError::InvalidKey(key) => {
                 write!(f, "invalid key: {key:?} (expected one character)")
             }
@@ -71,6 +77,7 @@ pub struct Config {
 
 /// On-disk shape of `config.toml`; every key is optional.
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawConfig {
     wallpaper_dir: Option<String>,
     current_wallpaper_file: Option<String>,
@@ -81,6 +88,7 @@ struct RawConfig {
 }
 
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 struct RawKeymap {
     quit: Option<String>,
 }
@@ -117,10 +125,18 @@ impl Config {
             cfg.hypr_env_file = expand_home(&p, home);
         }
         if let Some(names) = raw.modules {
-            cfg.modules = names
-                .iter()
-                .map(|n| Module::from_name(n))
-                .collect::<Result<_, _>>()?;
+            if names.is_empty() {
+                return Err(ConfigError::NoModules);
+            }
+            let mut modules: Vec<Module> = Vec::with_capacity(names.len());
+            for name in &names {
+                let module = Module::from_name(name)?;
+                if modules.contains(&module) {
+                    return Err(ConfigError::DuplicateModule(name.as_str().into()));
+                }
+                modules.push(module);
+            }
+            cfg.modules = modules;
         }
         if let Some(quit) = raw.keymap.and_then(|k| k.quit) {
             cfg.keymap.quit = single_char(&quit)?;
@@ -132,7 +148,7 @@ impl Config {
 fn expand_home(value: &str, home: &Path) -> PathBuf {
     match value.strip_prefix('~') {
         Some("") => home.to_path_buf(),
-        Some(rest) if rest.starts_with('/') => home.join(&rest[1..]),
+        Some(rest) if rest.starts_with('/') => home.join(rest.trim_start_matches('/')),
         _ => PathBuf::from(value),
     }
 }
