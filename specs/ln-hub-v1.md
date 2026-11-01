@@ -215,6 +215,25 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - (Deferred from S3) An `App` built from `Config::default_for(home)` lists the wallpapers in
     `<home>/Pictures/Wallpapers`.
 
+### Slice 4.1 (review follow-up)
+- slice_id: S4.1-wallpaper-list-hardening
+- behavior: The wallpaper list has a defined set of media types, sorts case-insensitively, keeps
+  each subdirectory's files together, and only hides a `.jpg` when a video shares its stem.
+- seam: `App` (focus Theme, `l`) → items column.
+- test_paths: [tests/s4_1_wallpapers_hardening.rs]
+- owned_paths: [src/**]
+- acceptance_criteria:
+  - Media types: images `png jpg jpeg webp gif`, videos `mp4 webm mkv`, extension matched
+    case-insensitively. Dir with `Zebra.png`, `apple.png`, `Mango.PNG`, `clip.WEBM`, `pic.webp`,
+    `x.jpeg`, `y.gif`, `zoo.mkv`, `doc.pdf` → items in the order `apple.png`, `clip.WEBM`,
+    `Mango.PNG`, `pic.webp`, `x.jpeg`, `y.gif`, `Zebra.png`, `zoo.mkv`; `doc.pdf` absent.
+  - Dir with `solo.jpg`, `b.mp4`, `b.jpg` → `b.mp4` then `solo.jpg`; `b.jpg` absent.
+  - Dir with `a1/x.png`, `a01/y.png`, `a1/z.png` → `a01/y.png`, `a1/x.png`, `a1/z.png`
+    (subdirectories sorted by name, each subdirectory's files contiguous).
+- Refactor (no behavior change, after GREEN): `wallpaper::discover` returns `Vec<Wallpaper>`
+  (`name`, `path`, `kind`, `thumb`) so S5 and S7 reuse the pairing; classify each file once.
+  Extracting a Theme items pane from `App` is deferred to S5, where the cursor arrives.
+
 ### Slice 5
 - slice_id: S5-current-wallpaper
 - behavior: The currently applied wallpaper is marked and preselected.
