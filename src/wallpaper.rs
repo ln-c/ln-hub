@@ -1,7 +1,8 @@
 //! Wallpaper discovery for the Theme items column.
 //!
 //! Lists images and videos in the wallpaper directory: top-level entries first, then entries
-//! from one subdirectory level as `subdir/name`. Each group is sorted naturally. A `.jpg` that
+//! from one subdirectory level as `subdir/name`. Names sort naturally and case-insensitively;
+//! subdirectories are taken in name order, each keeping its files together. A `.jpg` that
 //! shares its stem with a video in the same directory is that video's thumbnail and is hidden.
 
 use std::cmp::Ordering;
@@ -16,21 +17,18 @@ const VIDEO_EXTS: &[&str] = &["mp4", "webm", "mkv"];
 
 /// Display names of the wallpapers in `dir`. A missing or unreadable directory yields none.
 pub(crate) fn discover(dir: &Path) -> Vec<String> {
-    let (files, subdirs) = read_entries(dir);
+    let (files, mut subdirs) = read_entries(dir);
     let mut names = media_names(&files);
 
-    let mut nested = Vec::new();
+    subdirs.sort_by(|a, b| natural_cmp(&a.0, &b.0));
     for (sub, path) in &subdirs {
         let (sub_files, _) = read_entries(path);
-        nested.extend(
+        names.extend(
             media_names(&sub_files)
                 .into_iter()
                 .map(|name| format!("{sub}/{name}")),
         );
     }
-    nested.sort_by(|a, b| natural_cmp(a, b));
-
-    names.extend(nested);
     names
 }
 
@@ -100,10 +98,10 @@ fn stem(name: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Orders names so digit runs compare by value (`img2.png` before `img10.png`). Ties on the
-/// natural order fall back to plain byte order, so the ordering is total.
+/// Orders names case-insensitively, with digit runs compared by value (`img2.png` before
+/// `img10.png`). Ties on that order fall back to plain byte order, so the ordering is total.
 fn natural_cmp(a: &str, b: &str) -> Ordering {
-    natural_chunks(a, b).then_with(|| a.cmp(b))
+    natural_chunks(&a.to_lowercase(), &b.to_lowercase()).then_with(|| a.cmp(b))
 }
 
 fn natural_chunks(a: &str, b: &str) -> Ordering {
