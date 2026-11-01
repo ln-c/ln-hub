@@ -184,6 +184,22 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - `modules = ["Audio"]` → `Err(ConfigError::UnknownModule("Audio"))`.
   - `wallpaper_dir = "~/walls"` with home `/h` → resolves to `/h/walls`.
 
+### Slice 3.1 (review follow-up)
+- slice_id: S3.1-config-hardening
+- behavior: `from_toml` rejects configs that would leave `App` in a broken state or hide typos.
+- seam: `Config::from_toml`
+- test_paths: [tests/s3_1_config_hardening.rs]
+- owned_paths: [src/**]
+- acceptance_criteria:
+  - `wallpaper_dir = "~//walls"` with home `/h` → `/h/walls` (not `/walls`).
+  - `modules = []` → `Err(ConfigError::NoModules)`.
+  - `modules = ["Theme", "Theme"]` → `Err(ConfigError::DuplicateModule("Theme"))`.
+  - `wallpaper_dr = "x"` (unknown top-level key) → `Err(ConfigError::Parse(msg))` with `msg`
+    containing `wallpaper_dr`.
+  - `[keymap]\nquite = "x"` (unknown keymap key) → `Err(ConfigError::Parse(msg))` with `msg`
+    containing `quite`.
+- Deferred to S5+: key-conflict validation (`quit = "j"`) together with an `Action` keymap table.
+
 ### Slice 4
 - slice_id: S4-wallpaper-list
 - behavior: The Theme module lists wallpapers. Video thumbnails are hidden, and the list is
