@@ -212,6 +212,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     `images/c.jpg` → items render in the order `b.mp4`, `img2.png`, `img10.png`, `images/c.jpg`.
     `b.jpg` (thumb of `b.mp4`) and `notes.txt` are absent.
   - An empty or missing dir → the items column shows `No wallpapers in <dir>`. No panic.
+  - (Deferred from S3) An `App` built from `Config::default_for(home)` lists the wallpapers in
+    `<home>/Pictures/Wallpapers`.
 
 ### Slice 5
 - slice_id: S5-current-wallpaper
