@@ -13,11 +13,11 @@ mod common;
 
 use common::*;
 use ln_hub::{App, Config};
+use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::style::{Color, Modifier};
-use ratatui::Terminal;
 
 const W: u16 = 80;
 const H: u16 = 24;
@@ -89,15 +89,31 @@ fn j_moves_highlight_theme_to_monitors_without_wrap() {
     let mut app = new_app("highlight");
 
     let (theme0, mon0) = module_styles(&draw(&mut app));
-    assert_ne!(theme0, mon0, "initially exactly Theme must be highlighted (styles differ)");
+    assert_ne!(
+        theme0, mon0,
+        "initially exactly Theme must be highlighted (styles differ)"
+    );
 
     app.handle_key(key(KeyCode::Char('j')));
     let (theme1, mon1) = module_styles(&draw(&mut app));
-    assert_eq!(mon1, theme0, "after j, Monitors must carry the highlight style Theme had");
-    assert_eq!(theme1, mon0, "after j, Theme must carry the plain style Monitors had");
-    assert_ne!(theme1, mon1, "after j, highlight must still differ between rows");
+    assert_eq!(
+        mon1, theme0,
+        "after j, Monitors must carry the highlight style Theme had"
+    );
+    assert_eq!(
+        theme1, mon0,
+        "after j, Theme must carry the plain style Monitors had"
+    );
+    assert_ne!(
+        theme1, mon1,
+        "after j, highlight must still differ between rows"
+    );
 
     app.handle_key(key(KeyCode::Char('j')));
     let (theme2, mon2) = module_styles(&draw(&mut app));
-    assert_eq!((theme2, mon2), (theme1, mon1), "second j must stay on Monitors (no wrap)");
+    assert_eq!(
+        (theme2, mon2),
+        (theme1, mon1),
+        "second j must stay on Monitors (no wrap)"
+    );
 }

@@ -38,7 +38,10 @@ impl FakeSystem {
     }
 
     pub fn set_stdout(&self, prog: &str, out: &str) {
-        self.stdout.lock().unwrap().push((prog.to_string(), out.to_string()));
+        self.stdout
+            .lock()
+            .unwrap()
+            .push((prog.to_string(), out.to_string()));
     }
 
     pub fn set_job_state(&self, s: JobState) {
@@ -55,9 +58,10 @@ impl FakeSystem {
 }
 
 fn record(log: &CallLog, prog: &str, args: &[&str]) {
-    log.lock()
-        .unwrap()
-        .push((prog.to_string(), args.iter().map(|s| s.to_string()).collect()));
+    log.lock().unwrap().push((
+        prog.to_string(),
+        args.iter().map(|s| s.to_string()).collect(),
+    ));
 }
 
 fn success_output(stdout: Vec<u8>) -> Output {
@@ -101,7 +105,11 @@ pub fn key(code: KeyCode) -> KeyEvent {
 pub fn buffer_lines(buf: &Buffer) -> Vec<String> {
     let w = buf.area.width;
     (0..buf.area.height)
-        .map(|y| (0..w).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
+        .map(|y| {
+            (0..w)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        })
         .collect()
 }
 
