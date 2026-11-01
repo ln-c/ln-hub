@@ -1,0 +1,15 @@
+[package]
+name = "ln-hub"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "ln_hub"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ln-hub"
+path = "src/main.rs"
+
+[dependencies]
+ratatui = "0.30"
