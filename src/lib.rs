@@ -4,6 +4,7 @@ mod app;
 mod config;
 mod palette;
 mod system;
+mod wallpaper;
 
 pub use app::App;
 pub use config::{Config, ConfigError, Module};
