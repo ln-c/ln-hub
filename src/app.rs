@@ -10,6 +10,7 @@ use crate::system::System;
 /// Top-level application state: the module column, its selection and the quit flag.
 pub struct App {
     modules: Vec<Module>,
+    quit_key: char,
     selected: usize,
     quit: bool,
 }
@@ -18,6 +19,7 @@ impl App {
     pub fn new(cfg: Config, _sys: Box<dyn System>) -> App {
         App {
             modules: cfg.modules,
+            quit_key: cfg.keymap.quit,
             selected: 0,
             quit: false,
         }
@@ -25,7 +27,7 @@ impl App {
 
     pub fn handle_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('q') => self.quit = true,
+            KeyCode::Char(c) if c == self.quit_key => self.quit = true,
             KeyCode::Char('j') if self.selected + 1 < self.modules.len() => self.selected += 1,
             _ => {}
         }
