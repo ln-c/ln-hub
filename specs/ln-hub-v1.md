@@ -220,7 +220,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
 - behavior: The wallpaper list has a defined set of media types, sorts case-insensitively, keeps
   each subdirectory's files together, and only hides a `.jpg` when a video shares its stem.
 - seam: `App` (focus Theme, `l`) → items column.
-- test_paths: [tests/s4_1_wallpapers_hardening.rs]
+- test_paths: [tests/s4_1_wallpapers_hardening.rs, tests/s4_1_non_utf8.rs]
 - owned_paths: [src/**]
 - acceptance_criteria:
   - Media types: images `png jpg jpeg webp gif`, videos `mp4 webm mkv`, extension matched
@@ -230,6 +230,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - Dir with `solo.jpg`, `b.mp4`, `b.jpg` → `b.mp4` then `solo.jpg`; `b.jpg` absent.
   - Dir with `a1/x.png`, `a01/y.png`, `a1/z.png` → `a01/y.png`, `a1/x.png`, `a1/z.png`
     (subdirectories sorted by name, each subdirectory's files contiguous).
+  - A file whose name is not valid UTF-8 (e.g. bytes `bad\xff.png`) is skipped; `good.png`
+    beside it is still listed. (Its path could not round-trip through a display name.)
 - Refactor (no behavior change, after GREEN): `wallpaper::discover` returns `Vec<Wallpaper>`
   (`name`, `path`, `kind`, `thumb`) so S5 and S7 reuse the pairing; classify each file once.
   Extracting a Theme items pane from `App` is deferred to S5, where the cursor arrives.
