@@ -1,0 +1,13 @@
+  2680.7 ms  after-enter-1 |Applying videos/frieren_memories_live.mp4…                                      |
+  2802.6 ms  after-enter-2 |Applying videos/frieren_memories_live.mp4…                                      |
+  2921.5 ms  after-enter-3 |Applying videos/frieren_memories_live.mp4…                                      |
+  3042.4 ms  after-enter-4 |Applying videos/frieren_memories_live.mp4…                                      |
+  3159.1 ms  after-enter-5 |Applying videos/frieren_memories_live.mp4…                                      |
+  3281.1 ms  after-enter-6 |Applying videos/frieren_memories_live.mp4…                                      |
+  3401.4 ms  after-enter-7 |Applying videos/frieren_memories_live.mp4…                                      |
+  3518.9 ms  after-enter-8 |Applying videos/frieren_memories_live.mp4…                                      |
+  3643.4 ms  after-enter-9 |Applying videos/frieren_memories_live.mp4…                                      |
+  3761.9 ms after-enter-10 |Applying videos/frieren_memories_live.mp4…                                      |
+  3880.7 ms after-enter-11 |Applying videos/frieren_memories_live.mp4…                                      |
+  4000.0 ms after-enter-12 |Applying videos/frieren_memories_live.mp4…                                      |
+  5561.0 ms           late |Applied videos/frieren_memories_live.mp4                                        |

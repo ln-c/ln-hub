@@ -60,6 +60,9 @@ impl App {
     pub fn new(cfg: Config, sys: Box<dyn System>) -> App;
     pub fn handle_key(&mut self, key: crossterm::event::KeyEvent);
     pub fn tick(&mut self); // poll jobs, reload palette if colors file changed
+    pub fn init_started(&mut self); // status shows Initializing… while the startup query runs (S16)
+    pub fn init_finished(&mut self, now: Instant); // Initializing… → Ready for ~1 s or until the first key (S16)
+    pub fn tick_at(&mut self, now: Instant); // tick() == tick_at(Instant::now()) (S16)
     pub fn render(&mut self, f: &mut ratatui::Frame);
     pub fn should_quit(&self) -> bool;
     pub fn preview_image(&self) -> Option<PreviewImage>; // as of the last render (S13)
@@ -151,3 +154,6 @@ Each slice lives in its own file under `tasks/ln-hub-v1/` (front matter links ba
 | S13-bin | The binary: `--version`, real `ProcSystem`, terminal loop, sixel preview | [s13-bin.md](../tasks/ln-hub-v1/s13-bin.md) | green |
 | S14-picker-query | Terminal capability query with a hard deadline; no freeze, no eaten keys | [s14-picker-query.md](../tasks/ln-hub-v1/s14-picker-query.md) | green |
 | S15-monitor-popup | `Enter` on a monitor opens a confirm popup overlay | [s15-monitor-popup.md](../tasks/ln-hub-v1/s15-monitor-popup.md) | green |
+| S16-init-status | Status row shows `Initializing…` during the startup query, then `Ready` until the first key or ~1 s | [s16-init-status.md](../tasks/ln-hub-v1/s16-init-status.md) | green |
+| S17-help-status-overlap | The right-aligned `Font:` status never overprints the help line or other left status text | [s17-help-status-overlap.md](../tasks/ln-hub-v1/s17-help-status-overlap.md) | green |
+| S18-review-followups | S14/S15 review follow-ups: sturdier pty tests, sixel-reply pty test, popup and query-thread refactors | [s18-review-followups.md](../tasks/ln-hub-v1/s18-review-followups.md) | green |

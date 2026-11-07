@@ -6,6 +6,7 @@ mod font;
 mod monitor;
 mod palette;
 mod pane;
+mod popup;
 mod proc;
 mod system;
 pub mod term_query;

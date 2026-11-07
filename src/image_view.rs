@@ -3,6 +3,13 @@
 //! Decoding happens on a worker thread; the resize/encode step inside `StatefulImage` stays
 //! synchronous (it only reruns when the image or its area changes, and the worker downscales
 //! huge sources first so that step is cheap).
+//!
+//! Notes:
+//! - A terminal reply that arrives after the ~250 ms query window is read by the event loop as
+//!   key bytes; only what arrives inside the window is dropped.
+//! - `Picker::from_fontsize` is deprecated and kept behind `#[allow(deprecated)]` because it is
+//!   the only public way to set the parsed cell size; revisit on the next `ratatui-image` major
+//!   bump.
 
 use std::collections::VecDeque;
 use std::io::{self, Write};
@@ -198,9 +205,10 @@ fn query_terminal() -> Capabilities {
         }
         let stdin = rustix::stdio::stdin();
         let mut fds = [PollFd::new(&stdin, PollFlags::IN)];
-        let timeout = Timespec {
-            tv_sec: 0,
-            tv_nsec: i64::from(left.subsec_nanos()),
+        // `left` is at most `WINDOW`, so the conversion cannot fail; ending the query is the
+        // safe fallback.
+        let Ok(timeout) = Timespec::try_from(left) else {
+            break;
         };
         match poll(&mut fds, Some(&timeout)) {
             Ok(0) => {
@@ -209,8 +217,10 @@ fn query_terminal() -> Capabilities {
                 }
             }
             Ok(_) => match rustix::io::read(stdin, &mut buf) {
-                Ok(0) | Err(_) => break,
+                Ok(0) => break,
                 Ok(n) => parser.feed(&buf[..n]),
+                Err(rustix::io::Errno::INTR) => {}
+                Err(_) => break,
             },
             Err(rustix::io::Errno::INTR) => {}
             Err(_) => break,
@@ -220,7 +230,7 @@ fn query_terminal() -> Capabilities {
 }
 
 fn picker_from(caps: &Capabilities) -> Picker {
-    #[allow(deprecated)] // the only public way to set the parsed cell size
+    #[allow(deprecated)] // see the module doc note on `from_fontsize`
     let mut picker = match caps.font_size {
         Some(size) => Picker::from_fontsize(size.into()),
         None => Picker::halfblocks(),

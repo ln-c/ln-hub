@@ -1,0 +1,14 @@
+  2658.5 ms   before-apply |    Font: Terminess Nerd Font Propo, size 15|
+  2859.5 ms  after-enter-1 |Applying wp_small_1.jpg…                    |
+  2959.8 ms  after-enter-2 |Applying wp_small_1.jpg…                    |
+  3058.3 ms  after-enter-3 |Applying wp_small_1.jpg…                    |
+  3158.2 ms  after-enter-4 |Applying wp_small_1.jpg…                    |
+  3259.9 ms  after-enter-5 |Applying wp_small_1.jpg…                    |
+  3357.8 ms  after-enter-6 |Applying wp_small_1.jpg…                    |
+  3456.2 ms  after-enter-7 |Applying wp_small_1.jpg…                    |
+  3555.8 ms  after-enter-8 |Applying wp_small_1.jpg…                    |
+  3656.0 ms  after-enter-9 |Applying wp_small_1.jpg…                    |
+  3756.2 ms after-enter-10 |Applying wp_small_1.jpg…                    |
+  3856.5 ms after-enter-11 |Applying wp_small_1.jpg…                    |
+  3957.0 ms after-enter-12 |Applying wp_small_1.jpg…                    |
+  6060.1 ms           late |Applied wp_small_1.jpg                      |

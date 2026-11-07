@@ -2,6 +2,8 @@
 //! Shared helpers for ln-hub integration tests.
 //! Only process execution (the `System` trait) is faked; the filesystem is real.
 
+pub mod pty;
+
 use std::io;
 use std::path::PathBuf;
 use std::process::Output;

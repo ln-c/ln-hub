@@ -1,4 +1,5 @@
 use std::io::ErrorKind;
+use std::time::{Duration, Instant};
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -7,9 +8,10 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Padding, Paragraph};
 
 use crate::config::{Config, Module};
-use crate::monitor::{MonitorsPane, Popup};
+use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
 use crate::pane::{Action, PaneAction, Program, TOP_PREFIX};
+use crate::popup::{Popup, PopupNext};
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::{PreviewImage, ThemePane};
 
@@ -18,6 +20,24 @@ const THEMECTL: &str = "ln-themectl";
 
 /// The program that enables and disables monitors.
 const MONITORCTL: &str = "ln-monitorctl";
+
+/// How long `Ready` stays in the status row after the startup query finishes.
+const READY_FOR: Duration = Duration::from_secs(1);
+
+/// The startup text of the status row; the lowest-priority left-side text.
+enum Startup {
+    Initializing,
+    Ready { until: Instant },
+}
+
+impl Startup {
+    fn text(&self) -> &'static str {
+        match self {
+            Self::Initializing => "Initializing…",
+            Self::Ready { .. } => "Ready",
+        }
+    }
+}
 
 /// What to refresh once a job has finished.
 enum OnDone {
@@ -46,6 +66,7 @@ pub struct App {
     selected: usize,
     job: Option<Job>,
     status: Option<String>,
+    startup: Option<Startup>,
     /// A `g` was pressed; the next key completes or cancels `gg`.
     top_pending: bool,
     /// The image offered by the last `render`.
@@ -72,6 +93,7 @@ impl App {
             selected: 0,
             job: None,
             status: None,
+            startup: None,
             top_pending: false,
             preview_image: None,
             popup: None,
@@ -80,12 +102,14 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
+        if matches!(self.startup, Some(Startup::Ready { .. })) {
+            self.startup = None;
+        }
         if let Some(popup) = self.popup.take() {
-            match key.code {
-                KeyCode::Enter if popup.confirm.is_some() => self.run(popup.confirm),
-                KeyCode::Esc => {}
-                KeyCode::Char(c) if c == self.quit_key => {}
-                _ => self.popup = Some(popup),
+            match popup.on_key(key.code, self.quit_key) {
+                PopupNext::Keep(popup) => self.popup = Some(popup),
+                PopupNext::Close => {}
+                PopupNext::Confirm(action) => self.run(Some(action)),
             }
             return;
         }
@@ -153,7 +177,13 @@ impl App {
                 None
             }
             (Some(Module::Monitors), Action::Apply) => {
-                self.popup = self.monitors.popup(self.job.is_some());
+                self.popup = self.monitors.popup().map(|popup| {
+                    if self.job.is_some() {
+                        popup.busy()
+                    } else {
+                        popup
+                    }
+                });
                 None
             }
             (Some(_), Action::Apply) if self.job.is_some() => None,
@@ -168,8 +198,28 @@ impl App {
         self.quit
     }
 
+    /// The startup terminal query began: the status row shows `Initializing…`.
+    pub fn init_started(&mut self) {
+        self.startup = Some(Startup::Initializing);
+    }
+
+    /// The startup terminal query finished: the status row shows `Ready` for a second.
+    pub fn init_finished(&mut self, now: Instant) {
+        self.startup = Some(Startup::Ready {
+            until: now + READY_FOR,
+        });
+    }
+
     /// Polls the in-flight job; once it has finished, reports the outcome and releases the job.
     pub fn tick(&mut self) {
+        self.tick_at(Instant::now());
+    }
+
+    /// `tick` with an injectable clock: also expires `Ready`.
+    pub fn tick_at(&mut self, now: Instant) {
+        if matches!(self.startup, Some(Startup::Ready { until }) if now >= until) {
+            self.startup = None;
+        }
         self.palette.reload_if_changed();
         let Some(job) = self.job.take() else {
             return;
@@ -230,29 +280,35 @@ impl App {
 
         self.render_status(f, status_area, theme_active);
         if let Some(popup) = &self.popup {
-            self.preview_image = None;
             render_popup(f, main_area, popup);
         }
     }
 
-    /// The status row: the open prompt or the status message on the left, and the font summary
-    /// on the right while the Theme items are focused.
+    /// The status row: the left text and, while the Theme items are focused, the font summary F.
+    ///
+    /// Left text: the open prompt, else the status message (this includes the help line), else
+    /// the startup status, else empty.
+    /// F rule: with an empty left text F is right-aligned, clipped by the row edge if wider than
+    /// the row (leading cells kept); otherwise F is drawn only when it fits beside the left text
+    /// with one blank cell between them, and is omitted whole when it does not.
     fn render_status(&self, f: &mut Frame, area: Rect, theme_active: bool) {
         let font_text = if theme_active {
             self.theme.font_summary()
         } else {
             String::new()
         };
-        let font_width = u16::try_from(Line::from(font_text.as_str()).width()).unwrap_or(u16::MAX);
-        let [left_area, font_area] =
-            Layout::horizontal([Constraint::Fill(1), Constraint::Length(font_width)]).areas(area);
         let left = self
             .theme
             .prompt_line()
             .or_else(|| self.status.clone())
+            .or_else(|| self.startup.as_ref().map(|s| s.text().to_string()))
             .unwrap_or_default();
-        f.render_widget(Paragraph::new(left), left_area);
-        f.render_widget(Paragraph::new(font_text), font_area);
+        let left_width = Line::from(left.as_str()).width();
+        let font_width = Line::from(font_text.as_str()).width();
+        f.render_widget(Paragraph::new(left.as_str()), area);
+        if let Some(slot) = font_slot(area, left_width, font_width) {
+            f.render_widget(Paragraph::new(font_text), slot);
+        }
     }
 
     /// The module whose panes are drawn: the selected one once the items column is focused.
@@ -308,13 +364,10 @@ impl App {
 
 /// Draws the popup centred over `area`, over a cleared box just wide enough for its text.
 fn render_popup(f: &mut Frame, area: Rect, popup: &Popup) {
-    let text_width = popup
-        .lines
-        .iter()
-        .map(|l| Line::from(l.as_str()).width())
-        .max();
+    let lines = popup.lines();
+    let text_width = lines.iter().map(|l| Line::from(l.as_str()).width()).max();
     let width = u16::try_from(text_width.unwrap_or(0) + 4).unwrap_or(u16::MAX);
-    let height = u16::try_from(popup.lines.len() + 2).unwrap_or(u16::MAX);
+    let height = u16::try_from(lines.len() + 2).unwrap_or(u16::MAX);
     let [_, row, _] = Layout::vertical([
         Constraint::Fill(1),
         Constraint::Length(height.min(area.height)),
@@ -327,10 +380,28 @@ fn render_popup(f: &mut Frame, area: Rect, popup: &Popup) {
         Constraint::Fill(1),
     ])
     .areas(row);
-    let lines: Vec<Line> = popup.lines.iter().map(|l| Line::from(l.as_str())).collect();
+    let lines: Vec<Line> = lines.iter().map(|l| Line::from(l.as_str())).collect();
     f.render_widget(Clear, box_area);
     f.render_widget(
         Paragraph::new(lines).block(Block::bordered().padding(Padding::horizontal(1))),
         box_area,
     );
+}
+
+/// Where the font summary goes on the status row, or `None` when it is hidden.
+fn font_slot(area: Rect, left_width: usize, font_width: usize) -> Option<Rect> {
+    if font_width == 0 {
+        return None;
+    }
+    let row = usize::from(area.width);
+    if left_width > 0 && left_width.saturating_add(1).saturating_add(font_width) > row {
+        return None;
+    }
+    // At most the row width, so the conversion cannot fail.
+    let width = u16::try_from(font_width.min(row)).expect("bounded by the row width");
+    Some(Rect {
+        x: area.x + (area.width - width),
+        width,
+        ..area
+    })
 }

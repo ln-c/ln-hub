@@ -1,0 +1,3 @@
+     4.7 ms           init |Initializing…                                                                   |
+   207.1 ms          ready |Ready                                                                           |
+  1158.1 ms        cleared |                                                                                |

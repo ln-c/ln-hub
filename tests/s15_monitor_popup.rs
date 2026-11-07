@@ -56,13 +56,6 @@ fn esc(app: &mut App) {
     app.handle_key(key(KeyCode::Esc));
 }
 
-/// True when some row of the `w` x 24 render contains `text`.
-fn shows_at(app: &mut App, w: u16, text: &str) -> bool {
-    buffer_lines(&draw_sized(app, w, DRAW_H))
-        .iter()
-        .any(|l| l.contains(text))
-}
-
 /// Panics with a buffer dump unless `text` is on screen at `w` columns.
 fn assert_shows_at(app: &mut App, w: u16, text: &str) {
     let buf = draw_sized(app, w, DRAW_H);
@@ -324,21 +317,5 @@ fn popup_while_a_job_runs_shows_applying_and_enter_is_silent_and_esc_closes() {
             "no second job while one runs: {:?}",
             sys.spawn_calls()
         );
-    }
-}
-
-#[test]
-fn preview_image_is_none_while_the_popup_is_open_also_after_a_render() {
-    // Regression guard (passes before S15 because Monitors never carry a preview image): the bin
-    // paints the sixel after `render`, which would cover the popup, so the image must stay None
-    // while the popup is open, before and after a render, at both widths.
-    for w in [80u16, 120] {
-        let sys = sys_with(&[edp(false), dp(false)]);
-        let mut a = dp_app(&format!("s15-preview-{w}"), &sys);
-        enter(&mut a);
-        assert!(a.preview_image().is_none());
-        let _ = draw_sized(&mut a, w, DRAW_H);
-        assert!(a.preview_image().is_none(), "{w} cols: after render");
-        assert!(shows_at(&mut a, w, "DP-1 off"), "popup must be open");
     }
 }

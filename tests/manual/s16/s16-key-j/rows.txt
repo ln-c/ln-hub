@@ -1,0 +1,2 @@
+   254.4 ms     before-key |Ready                                                                           |
+   355.7 ms        after-j |                                                                                |

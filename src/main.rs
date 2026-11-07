@@ -4,7 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use image_view::ImageView;
 use ln_hub::{App, Config, ProcSystem};
@@ -13,10 +13,16 @@ use ratatui::crossterm::event::{self, Event, KeyEventKind};
 
 fn run(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
     // The first frame is drawn before any image work (picker query, worker thread) happens.
+    app.init_started();
     terminal.draw(|f| app.render(f))?;
     let mut images = ImageView::new();
+    let mut was_pending = true;
     while !app.should_quit() {
         images.poll();
+        if was_pending && !images.query_pending() {
+            was_pending = false;
+            app.init_finished(Instant::now());
+        }
         terminal.draw(|f| {
             app.render(f);
             if let Some(preview) = app.preview_image() {

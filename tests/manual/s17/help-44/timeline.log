@@ -1,0 +1,16 @@
+     0.1 ms  spawn cmd=['/tmp/ln-hub'] winsize=24x44 silent=False
+     5.3 ms  EVENT init: status row shows Initializing…
+     7.2 ms  stdin->child b'\x1b[6;26;12t\x1b[?62;4;22;28;52c'
+    54.4 ms  EVENT ready: status row shows Ready
+  1056.0 ms  EVENT readygone: Ready cleared (1002 ms after Ready)
+  1156.3 ms  ACTION dump 'a-modules-left-empty' (after readygone+100.0ms)
+  1156.7 ms  ACTION grim 'a-modules-left-empty' (after readygone+100.0ms)
+  1256.6 ms  ACTION inject 'l' (after readygone+200.0ms)
+  1556.3 ms  ACTION dump 'b-items-left-empty' (after readygone+500.0ms)
+  1556.7 ms  ACTION grim 'b-items-left-empty' (after readygone+500.0ms)
+  1760.6 ms  ACTION inject '?' (after readygone+700.0ms)
+  2059.4 ms  ACTION dump 'c-help' (after readygone+1000.0ms)
+  2059.7 ms  ACTION grim 'c-help' (after readygone+1000.0ms)
+  2359.6 ms  ACTION sh 'pkill -x ln-hub' (after readygone+1300.0ms)
+  2373.6 ms  child exited status=None
+  2373.7 ms  child exit status=15

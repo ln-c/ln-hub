@@ -120,6 +120,7 @@ fn cell_size(params: &[u8]) -> Option<(u16, u16)> {
     parts.next().is_none().then_some((w, h))
 }
 
+/// One-shot convenience over `Parser` for tests and callers that have a single buffer.
 pub fn parse(bytes: &[u8]) -> Capabilities {
     let mut parser = Parser::new();
     parser.feed(bytes);

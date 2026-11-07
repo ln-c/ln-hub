@@ -1,0 +1,12 @@
+     0.2 ms  spawn cmd=['/tmp/ln-hub'] winsize=24x80 silent=False
+     5.1 ms  EVENT init: status row shows Initializing…
+     6.1 ms  stdin->child b'\x1b[6;26;12t\x1b[?62;4;22;28;52c'
+    52.7 ms  EVENT ready: status row shows Ready
+   252.9 ms  ACTION inject '?' (after ready+200.0ms)
+   253.4 ms  ACTION row 'before-key' (after ready+200.0ms)
+   257.0 ms  EVENT readygone: Ready cleared (204 ms after Ready)
+   352.8 ms  ACTION row 'after-help' (after ready+300.0ms)
+   353.2 ms  ACTION grim 'after-help' (after ready+300.0ms)
+   354.0 ms  ACTION dump 'after-help' (after ready+300.0ms)
+   653.7 ms  ACTION inject 'q' (after ready+600.0ms)
+   656.0 ms  child exited status=0
