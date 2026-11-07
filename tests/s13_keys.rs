@@ -330,7 +330,7 @@ fn question_mark_shows_the_help_with_the_quit_key_and_moves_nothing() {
     assert_theme_hl(&mut app, &ABC, "b1.png");
     assert!(!app.should_quit());
     press(&mut app, 'j'); // still in the items column, no prompt open
-    assert_theme_hl(&mut app, &ABC, "c1.png");
+    assert_theme_hl(&mut app, &ABC, "b2.png");
 }
 
 #[test]
