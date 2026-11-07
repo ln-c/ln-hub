@@ -2,32 +2,37 @@
 
 use ratatui::crossterm::event::KeyCode;
 
-use crate::pane::{Action, PaneAction};
+use crate::pane::{Action, SpawnJob};
 
 /// What the popup offers for the row under the cursor.
 pub(crate) enum PopupKind {
     /// `Enter` carries out the action.
-    Confirm(PaneAction),
+    Confirm(SpawnJob),
     /// The switch is not allowed; the popup only explains why.
     Refuse,
     /// A job is already running.
     Busy,
 }
 
-/// An open confirmation popup: the monitor row and what `Enter` may do about it.
+/// An open popup over a monitor row: a confirmation, a refusal or the busy notice, as `kind` says.
 pub(crate) struct Popup {
-    pub(crate) row: String,
-    pub(crate) kind: PopupKind,
+    row: String,
+    kind: PopupKind,
 }
 
 /// What a key does to an open popup.
 pub(crate) enum PopupNext {
     Keep(Popup),
     Close,
-    Confirm(PaneAction),
+    Confirm(SpawnJob),
 }
 
 impl Popup {
+    /// A popup over the monitor `row`, offering what `kind` says.
+    pub(crate) fn new(row: String, kind: PopupKind) -> Popup {
+        Popup { row, kind }
+    }
+
     /// The same row, but a job is running so `Enter` does nothing.
     pub(crate) fn busy(self) -> Popup {
         Popup {
@@ -39,8 +44,7 @@ impl Popup {
     /// The text shown: the row, then the switch name, the refusal or `Applying…`.
     pub(crate) fn lines(&self) -> Vec<String> {
         let message = match &self.kind {
-            PopupKind::Confirm(PaneAction::Spawn { name, .. }) => name.clone(),
-            PopupKind::Confirm(PaneAction::Status(message)) => message.clone(),
+            PopupKind::Confirm(job) => job.name.clone(),
             PopupKind::Refuse => "Refusing to disable the last enabled monitor".to_owned(),
             PopupKind::Busy => "Applying…".to_owned(),
         };
@@ -52,7 +56,7 @@ impl Popup {
     pub(crate) fn on_key(self, code: KeyCode, quit_key: char) -> PopupNext {
         match (Action::from_key(code, quit_key), self.kind) {
             (Some(Action::Cancel | Action::Quit), _) => PopupNext::Close,
-            (Some(Action::Apply), PopupKind::Confirm(action)) => PopupNext::Confirm(action),
+            (Some(Action::Apply), PopupKind::Confirm(job)) => PopupNext::Confirm(job),
             (_, kind) => PopupNext::Keep(Popup { kind, ..self }),
         }
     }

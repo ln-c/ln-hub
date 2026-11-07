@@ -10,7 +10,7 @@ use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::font::{self, Font};
-use crate::pane::{Action, Cursor, PaneAction, Program};
+use crate::pane::{Action, Cursor, PaneAction, Program, SpawnJob};
 use crate::wallpaper::{self, Kind, Wallpaper};
 
 /// Row prefix for the applied wallpaper.
@@ -116,11 +116,11 @@ fn font_job(flag: &str, label: &str, value: String) -> Option<PaneAction> {
     if value.is_empty() {
         return None;
     }
-    Some(PaneAction::Spawn {
+    Some(PaneAction::Spawn(SpawnJob {
         program: Program::Themectl,
         name: format!("{label} {value}"),
         args: vec![flag.to_owned(), value],
-    })
+    }))
 }
 
 pub(crate) struct ThemePane {
@@ -245,11 +245,11 @@ impl ThemePane {
     /// `ln-themectl -w <path>` for the wallpaper under the cursor.
     fn apply_selected(&self) -> Option<PaneAction> {
         let w = self.selected()?;
-        Some(PaneAction::Spawn {
+        Some(PaneAction::Spawn(SpawnJob {
             program: Program::Themectl,
             args: vec!["-w".to_owned(), w.path.to_string_lossy().into_owned()],
             name: w.name.clone(),
-        })
+        }))
     }
 
     /// Whether a prompt is open and taking every key.

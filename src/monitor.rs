@@ -6,7 +6,7 @@ use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use serde::Deserialize;
 
-use crate::pane::{Action, Cursor, PaneAction, Program};
+use crate::pane::{Action, Cursor, PaneAction, Program, SpawnJob};
 use crate::popup::{Popup, PopupKind};
 use crate::system::System;
 
@@ -109,13 +109,13 @@ impl MonitorsPane {
         let kind = if last_enabled {
             PopupKind::Refuse
         } else {
-            PopupKind::Confirm(PaneAction::Spawn {
+            PopupKind::Confirm(SpawnJob {
                 program: Program::Monitorctl,
                 args: vec![m.name.clone(), power.as_str().to_owned()],
                 name: format!("{} {}", m.name, power.as_str()),
             })
         };
-        Some(Popup { row: m.row(), kind })
+        Some(Popup::new(m.row(), kind))
     }
 
     /// Draws the pane's two columns; the preview is empty.
