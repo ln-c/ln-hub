@@ -669,3 +669,103 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     3.0 / 3.5 s, `q` at 5.5 s exited rc 0). Cause: the picker query runs on the main thread
     before the loop and leaves a stdin reader thread that takes the next key. Not run with
     `ssh -tt`.
+
+### Slice 14
+- slice_id: S14-picker-query
+- behavior: The terminal capability query has a hard deadline and never freezes the UI or eats
+  keys. ln-hub writes the query itself on a background thread, reads replies with `poll(2)`,
+  and builds the `Picker` from the parsed result. (From manual VM run item 9.)
+- seam: `ln_hub::term_query` (new lib module: reply parser, bytes in, capabilities out) and the
+  CLI in a pty. `ImageView` stays bin-only and only calls the query.
+- test_paths: [tests/s14_pty.rs, tests/s14_term_query.rs]
+- owned_paths: [src/**, Cargo.toml]
+- root cause: `Picker::from_query_stdio` (src/image_view.rs, `ImageView::new`) spawns a thread
+  doing a blocking `io::stdin().read()`. A terminal that never answers freezes the UI for about
+  2 s after the first frame. Keys typed in that window are eaten, and each restarts the timeout.
+  After the timeout the orphaned reader thread eats the first key.
+- acceptance_criteria:
+  - pty 24x80 that never answers queries: the first frame is drawn. `q` sent ~300 ms after
+    spawn → the process exits 0 within 1 s of the key. The output has no sixel `ESC P`.
+  - Same pty: keys sent after the query deadline are not lost. `j` then `q` → `q` exits on the
+    first press (no second `q` needed).
+  - Parser (`tests/s14_term_query.rs`, no tty):
+    - a DA1 reply (`ESC [ ? 62 ; 4 ; 9 c`) that lists attribute 4 → sixel;
+    - a kitty graphics OK reply (`ESC _ G i=… ; OK ESC \`) → kitty;
+    - a `ESC [ 6 ; <h> ; <w> t` reply → font size `(w, h)`;
+    - replies split across several reads, and replies mixed with key bytes, parse the same as
+      one clean read (feed the bytes in chunks);
+    - empty input, or a DA1 reply without 4 and without a kitty reply → halfblocks, no font
+      size (the picker keeps its default font size).
+  - The query thread reads only until the deadline (~250 ms, `poll(2)` on the tty fd) and
+    exits, leaving no reader on stdin: after it reports done, the next stdin byte goes to the
+    event loop.
+  - Same silent pty: the loop keeps drawing during the query window, so the process stays
+    responsive (the first-frame and exit criteria above cover it; no output stall is expected).
+- Decisions:
+  - Own query instead of `Picker::from_query_stdio`. The picker is built as
+    `Picker::halfblocks()` plus `set_protocol_type` (sixel / kitty) and the parsed font size.
+    No reply → halfblocks. `poll(2)` comes from a direct `rustix` dependency (`libc` is also
+    allowed).
+  - The query runs on a background thread, started after the first frame, and reports the parsed
+    capabilities over a channel. While it runs (<= ~250 ms) the thread owns every tty read. The
+    main loop keeps ticking and redrawing, so the UI does not freeze, but it does not read
+    crossterm events until the thread reports done: there is never a concurrent stdin reader.
+    The thread uses `poll(2)` with the deadline, sends the result and exits; no reader is left
+    behind. The main loop builds the `Picker` when the result arrives and uses halfblocks until
+    then. The "never concurrent" and "loop keeps redrawing" parts are covered by the pty
+    tests (no frozen window, no eaten key); the thread's exit before event reads resume is a
+    design rule, not separately testable.
+  - pty crate: `portable-pty` as a dev-dependency (the spawned bin gets a real controlling tty,
+    and the test controls the window size and timing). Confirmed.
+  - Key bytes that arrive within the deadline and are not replies are dropped and documented,
+    not replayed. The window is ~250 ms right after the first frame; replaying would need a
+    parser for key escapes. Confirmed.
+  - The query asks for DA1, kitty graphics and the cell size (`CSI 16 t`) in one write.
+    A DA1 reply is the sentinel every terminal answers, so the read may end early once it has
+    arrived and the input has gone idle. The deadline is the upper bound.
+  - The timing tests allow slack: `q` is sent at ~300 ms, i.e. after the 250 ms deadline plus
+    scheduling margin.
+
+### Slice 15
+- slice_id: S15-monitor-popup
+- behavior: `Enter` on a monitor opens a popup overlay with the full row and the switch it
+  will perform; a second `Enter` confirms. Rows in the column stay truncated at 80 columns.
+  (From manual VM run item 8.)
+- seam: `App::handle_key` / `App::render` with `TestBackend` and the `FakeSystem` call log.
+- test_paths: [tests/s15_monitor_popup.rs, tests/s10_toggle.rs]
+- owned_paths: [src/**]
+- acceptance_criteria:
+  - The popup opens at every width (80 and 120 columns). `Enter` on `DP-1` (on, 1920x1080@60)
+    → no spawn; the popup shows `DP-1  1920x1080@60  on` and `DP-1 off`.
+  - `Enter` in the popup → `spawn("ln-monitorctl", ["DP-1","off"])`; the popup closes; the
+    status reads `Applying DP-1 off…`, then `Applied DP-1 off` after `Done`, or
+    `Apply failed: <reason>` after `Failed`, as in S10. A disabled monitor shows and spawns
+    `on`.
+  - `Esc` closes the popup with no spawn. The quit key closes it too and does not quit the
+    app (`should_quit()` stays false). Quitting works again once it is closed.
+  - Other keys (`j`, `k`, `h`, `l`, `/`, `g`, `?`) are swallowed while it is open: the cursor,
+    the focus and the status do not change.
+  - Refusal: only `eDP-1` on; `Enter` on `eDP-1` → the popup shows the full row and
+    `Refusing to disable the last enabled monitor`. `Enter` in it does nothing (no spawn, no job
+    in flight); `Esc` and the quit key close it.
+  - A job is already running; `Enter` on a monitor → the popup shows `Applying…`. `Enter` in
+    it is silent (no spawn); `Esc` closes it.
+  - While the popup is open `App::preview_image()` is `None`, also after a `render`.
+  - The S10 tests that toggled on the first `Enter` are rewritten to go through the popup
+    (`Enter`, `Enter`) in RED. The refusal test now reads the popup text instead of the status.
+- Decisions:
+  - The popup replaces the S10 immediate toggle at all widths, not only when the row is
+    truncated. Rows in the column are unchanged (S9 pins the text, not the width).
+  - The confirm spawns exactly like the S10 toggle: same `Power` choice, same `Job` /
+    `OnDone::ReloadMonitors`, same status wording. S10's "status not cleared" and "Enter while a
+    job runs is silent" stay.
+  - The popup is `App` state (a `Popup` value), not a pane prompt: it takes every key before
+    the keymap, like an open prompt, but the quit key closes it instead of being text.
+  - The popup shows the state at open time. A `tick` that finishes a job or reloads the list
+    while it is open does not rewrite its text; the refusal / `Applying…` view is decided when
+    it opens. Unpinned.
+  - `preview_image()` is `None` while open because the bin paints the sixel after `app.render`,
+    and it would cover the popup. Monitors already have no preview image, so the guard is
+    cheap insurance (the field is only rewritten by `render`); it keeps the rule explicit for
+    a later popup elsewhere.
+  - Not in scope: a width-adaptive column, scrolling the row, or a popup for the Theme pane.
