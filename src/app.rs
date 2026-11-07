@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 
 use ratatui::Frame;
@@ -11,12 +12,16 @@ use crate::system::System;
 use crate::wallpaper::{self, Wallpaper};
 
 /// Top-level application state: the module column, its selection, the Theme wallpaper list
-/// and the quit flag.
+/// with its cursor and the applied wallpaper, and the quit flag.
 pub struct App {
     modules: Vec<Module>,
     quit_key: char,
     wallpaper_dir: PathBuf,
     wallpapers: Vec<Wallpaper>,
+    /// Index into `wallpapers` of the applied wallpaper, marked with `●`.
+    current: Option<usize>,
+    /// Index into `wallpapers` of the highlighted row; starts on the applied wallpaper.
+    cursor: usize,
     items_focused: bool,
     selected: usize,
     quit: bool,
@@ -25,11 +30,19 @@ pub struct App {
 impl App {
     pub fn new(cfg: Config, _sys: Box<dyn System>) -> App {
         let wallpapers = wallpaper::discover(&cfg.wallpaper_dir);
+        let current = fs::read_to_string(&cfg.current_wallpaper_file)
+            .ok()
+            .and_then(|s| {
+                let path = PathBuf::from(s.trim_end());
+                wallpapers.iter().position(|w| w.path == path)
+            });
         App {
             modules: cfg.modules,
             quit_key: cfg.keymap.quit,
             wallpaper_dir: cfg.wallpaper_dir,
             wallpapers,
+            current,
+            cursor: current.unwrap_or(0),
             items_focused: false,
             selected: 0,
             quit: false,
@@ -80,9 +93,21 @@ impl App {
                 let rows: Vec<ListItem> = self
                     .wallpapers
                     .iter()
-                    .map(|w| ListItem::new(w.name.as_str()))
+                    .enumerate()
+                    .map(|(i, w)| {
+                        let mark = if self.current == Some(i) {
+                            "● "
+                        } else {
+                            "  "
+                        };
+                        ListItem::new(format!("{mark}{}", w.name))
+                    })
                     .collect();
-                f.render_widget(List::new(rows).block(items_block), items_area);
+                let list = List::new(rows)
+                    .block(items_block)
+                    .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+                let mut state = ListState::default().with_selected(Some(self.cursor));
+                f.render_stateful_widget(list, items_area, &mut state);
             }
         } else {
             f.render_widget(items_block, items_area);
