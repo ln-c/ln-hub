@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::font::Font;
-use crate::style::HIGHLIGHT;
 use crate::wallpaper::{self, Kind, Wallpaper};
 
 /// Row prefix for the applied wallpaper.
@@ -20,11 +20,6 @@ const PLAIN_MARK: &str = "  ";
 /// Whether `w` is the applied wallpaper.
 fn is_current(current: Option<&Path>, w: &Wallpaper) -> bool {
     current == Some(w.path.as_path())
-}
-
-/// Reads the applied wallpaper's path from `current_file`.
-fn load_current(current_file: &Path) -> Option<PathBuf> {
-    wallpaper::read_current(current_file)
 }
 
 /// `bytes` in `ls -h` style: a plain count below 1 KiB, otherwise a power of 1024 with a unit
@@ -86,7 +81,7 @@ pub(crate) struct ThemePane {
 impl ThemePane {
     pub(crate) fn new(wallpaper_dir: PathBuf, current_file: &Path, env_file: &Path) -> ThemePane {
         let wallpapers = wallpaper::discover(&wallpaper_dir);
-        let current = load_current(current_file);
+        let current = wallpaper::read_current(current_file);
         let cursor = wallpapers
             .iter()
             .position(|w| is_current(current.as_deref(), w))
@@ -105,7 +100,7 @@ impl ThemePane {
     /// Re-reads the applied wallpaper so the `●` mark moves, and the font from the env file; the
     /// cursor is left where it is.
     pub(crate) fn reload(&mut self) {
-        self.current = load_current(&self.current_file);
+        self.current = wallpaper::read_current(&self.current_file);
         self.font = Font::load(&self.env_file);
     }
 
@@ -128,12 +123,18 @@ impl ThemePane {
     }
 
     /// Draws the wallpaper list and the details of the wallpaper under the cursor.
-    pub(crate) fn render(&self, f: &mut Frame, items_area: Rect, preview_area: Rect) {
-        self.render_items(f, items_area);
+    pub(crate) fn render(
+        &self,
+        f: &mut Frame,
+        items_area: Rect,
+        preview_area: Rect,
+        highlight: Style,
+    ) {
+        self.render_items(f, items_area, highlight);
         self.render_preview(f, preview_area);
     }
 
-    fn render_items(&self, f: &mut Frame, area: Rect) {
+    fn render_items(&self, f: &mut Frame, area: Rect, highlight: Style) {
         let block = Block::bordered().title("Items");
         if self.wallpapers.is_empty() {
             let msg = format!("No wallpapers in {}", self.wallpaper_dir.display());
@@ -152,7 +153,7 @@ impl ThemePane {
                 ListItem::new(format!("{mark}{}", w.name))
             })
             .collect();
-        let list = List::new(rows).block(block).highlight_style(HIGHLIGHT);
+        let list = List::new(rows).block(block).highlight_style(highlight);
         let mut state = ListState::default().with_selected(Some(self.cursor));
         f.render_stateful_widget(list, area, &mut state);
     }

@@ -2,10 +2,10 @@
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use serde::Deserialize;
 
-use crate::style::HIGHLIGHT;
 use crate::system::System;
 
 /// Shown in the items column when `hyprctl` fails or prints something unreadable.
@@ -101,14 +101,20 @@ impl MonitorsPane {
     }
 
     /// Draws the pane's two columns; the preview is empty.
-    pub(crate) fn render(&self, f: &mut Frame, items_area: Rect, preview_area: Rect) {
+    pub(crate) fn render(
+        &self,
+        f: &mut Frame,
+        items_area: Rect,
+        preview_area: Rect,
+        highlight: Style,
+    ) {
         let items_block = Block::bordered().title("Items");
         match &self.monitors {
             Some(monitors) => {
                 let rows: Vec<ListItem> = monitors.iter().map(|m| ListItem::new(m.row())).collect();
                 let list = List::new(rows)
                     .block(items_block)
-                    .highlight_style(HIGHLIGHT);
+                    .highlight_style(highlight);
                 let mut state = ListState::default().with_selected(Some(self.cursor));
                 f.render_stateful_widget(list, items_area, &mut state);
             }
