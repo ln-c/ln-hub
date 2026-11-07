@@ -27,6 +27,8 @@ pub(crate) struct Wallpaper {
     pub(crate) kind: Kind,
     /// For a video, the same-directory `.jpg` that shares its stem (hidden from the list).
     pub(crate) thumb: Option<PathBuf>,
+    /// File size in bytes, read once at discovery; `None` when the file cannot be read.
+    pub(crate) size: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,12 +105,14 @@ fn list_media(dir: &Path, prefix: Option<&str>, files: &[String]) -> Vec<Wallpap
                 Kind::Video => thumbs.get(c.stem).map(|t| dir.join(t)),
                 Kind::Image => None,
             };
+            let path = dir.join(c.name);
             Some(Wallpaper {
                 name: match prefix {
                     Some(p) => format!("{p}/{}", c.name),
                     None => c.name.to_owned(),
                 },
-                path: dir.join(c.name),
+                size: std::fs::metadata(&path).ok().map(|m| m.len()),
+                path,
                 kind,
                 thumb,
             })

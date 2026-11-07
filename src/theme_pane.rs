@@ -1,7 +1,6 @@
 //! The Theme items pane: the wallpaper list with its applied-wallpaper mark and cursor, and the
 //! font summary read from the Hyprland env file.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use ratatui::Frame;
@@ -49,8 +48,8 @@ fn human_size(bytes: u64) -> String {
 /// The detail lines for `w`: its name, size when the file can be read, kind, and thumbnail.
 fn preview_lines(w: &Wallpaper) -> Vec<String> {
     let mut lines = vec![w.name.clone()];
-    if let Ok(meta) = fs::metadata(&w.path) {
-        lines.push(human_size(meta.len()));
+    if let Some(size) = w.size {
+        lines.push(human_size(size));
     }
     lines.push(
         match w.kind {
@@ -63,6 +62,13 @@ fn preview_lines(w: &Wallpaper) -> Vec<String> {
         lines.push(format!("thumb: {}", file.to_string_lossy()));
     }
     lines
+}
+
+/// The image to draw as the sixel preview and the terminal cells it may cover.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreviewImage {
+    pub path: PathBuf,
+    pub area: Rect,
 }
 
 /// What a prompt edits.
@@ -215,9 +221,11 @@ impl ThemePane {
 
     /// Handles a key while the Theme items are focused and no prompt is open.
     pub(crate) fn handle(&mut self, action: Action) -> Option<PaneAction> {
+        let len = self.visible().len();
+        if self.cursor.navigate(action, len) {
+            return None;
+        }
         match action {
-            Action::Down => self.cursor.move_by(1, self.visible().len()),
-            Action::Up => self.cursor.move_by(-1, self.visible().len()),
             Action::Filter => {
                 self.prompt = Some(Prompt::new(PromptKind::Filter, self.filter.clone()))
             }
@@ -293,9 +301,9 @@ impl ThemePane {
         items_area: Rect,
         preview_area: Rect,
         highlight: Style,
-    ) {
+    ) -> Option<PreviewImage> {
         self.render_items(f, items_area, highlight);
-        self.render_preview(f, preview_area);
+        self.render_preview(f, preview_area)
     }
 
     fn render_items(&self, f: &mut Frame, area: Rect, highlight: Style) {
@@ -322,13 +330,25 @@ impl ThemePane {
         f.render_stateful_widget(list, area, &mut state);
     }
 
-    /// Draws the details of the wallpaper under the cursor; empty when there is none.
-    fn render_preview(&self, f: &mut Frame, area: Rect) {
+    /// Draws the details of the wallpaper under the cursor; empty when there is none. Returns the
+    /// image to draw below the details, when there is one and rows remain for it.
+    fn render_preview(&self, f: &mut Frame, area: Rect) -> Option<PreviewImage> {
         let block = Block::bordered().title("Preview");
-        let text = self
-            .selected()
-            .map(|w| preview_lines(w).join("\n"))
-            .unwrap_or_default();
-        f.render_widget(Paragraph::new(text).block(block), area);
+        let inner = block.inner(area);
+        let selected = self.selected();
+        let lines = selected.map(preview_lines).unwrap_or_default();
+        f.render_widget(Paragraph::new(lines.join("\n")).block(block), area);
+        let w = selected?;
+        let path = match w.kind {
+            Kind::Image => w.path.clone(),
+            Kind::Video => w.thumb.clone()?,
+        };
+        let used = u16::try_from(lines.len()).unwrap_or(u16::MAX);
+        let area = Rect {
+            y: inner.y.saturating_add(used),
+            height: inner.height.saturating_sub(used),
+            ..inner
+        };
+        (area.width > 0 && area.height > 0).then_some(PreviewImage { path, area })
     }
 }

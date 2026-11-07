@@ -16,20 +16,28 @@ pub(crate) enum Action {
     FontSize,
     Filter,
     Cancel,
+    Top,
+    Bottom,
+    Help,
 }
 
 /// The built-in character keys. `quit` may not take any of these (nor [`FILTER_KEY`]).
-const CHAR_KEYS: [(char, Action); 6] = [
+const CHAR_KEYS: [(char, Action); 8] = [
     ('j', Action::Down),
     ('k', Action::Up),
     ('h', Action::Left),
     ('l', Action::Right),
     ('f', Action::FontName),
     ('s', Action::FontSize),
+    ('G', Action::Bottom),
+    ('?', Action::Help),
 ];
 
 /// Opens the Theme items filter.
 const FILTER_KEY: char = '/';
+
+/// Starts the `gg` (top) sequence; reserved from `quit` like the built-in keys.
+pub(crate) const TOP_PREFIX: char = 'g';
 
 impl Action {
     /// Resolves a key outside a prompt. The quit key is checked first; config validation keeps it
@@ -51,7 +59,7 @@ impl Action {
 
     /// Whether `key` is already bound (or reserved) and so cannot be the quit key.
     pub(crate) fn is_built_in_key(key: char) -> bool {
-        key == FILTER_KEY || CHAR_KEYS.iter().any(|(k, _)| *k == key)
+        key == FILTER_KEY || key == TOP_PREFIX || CHAR_KEYS.iter().any(|(k, _)| *k == key)
     }
 }
 
@@ -92,6 +100,24 @@ impl Cursor {
         if let Some(last) = len.checked_sub(1) {
             self.0 = self.0.saturating_add_signed(delta).min(last);
         }
+    }
+
+    /// Applies a movement action (Down, Up, Top, Bottom) to a list of `len` rows; returns whether
+    /// `action` was one.
+    pub(crate) fn navigate(&mut self, action: Action, len: usize) -> bool {
+        match action {
+            Action::Down => self.move_by(1, len),
+            Action::Up => self.move_by(-1, len),
+            Action::Top => self.0 = 0,
+            Action::Bottom => self.last(len),
+            _ => return false,
+        }
+        true
+    }
+
+    /// Moves to the last row of a list of `len` rows; does nothing when it is empty.
+    fn last(&mut self, len: usize) {
+        self.0 = len.saturating_sub(1);
     }
 
     /// Pulls the cursor back onto the last row after the list shrank to `len` rows.

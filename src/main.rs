@@ -1,80 +1,108 @@
-use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
-use std::io;
-use std::path::PathBuf;
-use std::process::{Child, Command, Output, Stdio};
+mod image_view;
 
-use ln_hub::{App, Config, JobId, JobState, System};
+use std::io;
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::Duration;
+
+use image_view::ImageView;
+use ln_hub::{App, Config, ProcSystem};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
 
-/// Real process execution backed by `std::process`.
-struct ProcSystem {
-    next_id: Cell<u64>,
-    jobs: RefCell<HashMap<u64, Child>>,
-}
-
-impl ProcSystem {
-    fn new() -> Self {
-        ProcSystem {
-            next_id: Cell::new(1),
-            jobs: RefCell::new(HashMap::new()),
-        }
-    }
-}
-
-impl System for ProcSystem {
-    fn run(&self, prog: &str, args: &[&str]) -> io::Result<Output> {
-        Command::new(prog).args(args).output()
-    }
-
-    fn spawn(&self, prog: &str, args: &[&str]) -> io::Result<JobId> {
-        let child = Command::new(prog)
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
-        let id = self.next_id.get();
-        self.next_id.set(id + 1);
-        self.jobs.borrow_mut().insert(id, child);
-        Ok(JobId(id))
-    }
-
-    fn poll(&self, job: JobId) -> JobState {
-        let mut jobs = self.jobs.borrow_mut();
-        let Some(child) = jobs.get_mut(&job.0) else {
-            return JobState::Failed(format!("unknown job {}", job.0));
-        };
-        match child.try_wait() {
-            Ok(None) => JobState::Running,
-            Ok(Some(status)) if status.success() => JobState::Done,
-            Ok(Some(status)) => JobState::Failed(format!("exit {}", status.code().unwrap_or(-1))),
-            Err(e) => JobState::Failed(e.to_string()),
-        }
-    }
-}
-
 fn run(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
+    // The first frame is drawn before any image work (picker query, worker thread) happens.
+    terminal.draw(|f| app.render(f))?;
+    let mut images = ImageView::new();
     while !app.should_quit() {
-        terminal.draw(|f| app.render(f))?;
-        if let Event::Key(key) = event::read()?
+        images.poll();
+        terminal.draw(|f| {
+            app.render(f);
+            if let Some(preview) = app.preview_image() {
+                images.render(f, &preview);
+            }
+        })?;
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
             app.handle_key(key);
         }
+        app.tick();
     }
     Ok(())
 }
 
-fn main() -> io::Result<()> {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "HOME is not set"))?;
-    let mut app = App::new(Config::default_for(&home), Box::new(ProcSystem::new()));
+const USAGE: &str = "usage: ln-hub [--version|--config <path>]";
+
+enum Cli {
+    Version,
+    Run { config: Option<PathBuf> },
+}
+
+fn parse_args(args: impl Iterator<Item = String>) -> Option<Cli> {
+    let mut args = args;
+    match (args.next().as_deref(), args.next(), args.next()) {
+        (None, _, _) => Some(Cli::Run { config: None }),
+        (Some("--version"), None, _) => Some(Cli::Version),
+        (Some("--config"), Some(path), None) => Some(Cli::Run {
+            config: Some(PathBuf::from(path)),
+        }),
+        _ => None,
+    }
+}
+
+/// Loads the config from `path`, or the default location (falling back to built-in defaults
+/// when that file does not exist). Errors are returned as printable messages.
+fn load_config(path: Option<PathBuf>, home: &Path) -> Result<Config, String> {
+    let explicit = path.is_some();
+    let path = path.unwrap_or_else(|| home.join(".config/ln-hub/config.toml"));
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == io::ErrorKind::NotFound && !explicit => {
+            return Ok(Config::default_for(home));
+        }
+        Err(e) => return Err(format!("ln-hub: config {}: {e}", path.display())),
+    };
+    Config::from_toml(&text, home).map_err(|e| format!("ln-hub: config {}: {e}", path.display()))
+}
+
+fn main() -> ExitCode {
+    let config = match parse_args(std::env::args().skip(1)) {
+        None => {
+            eprintln!("{USAGE}");
+            return ExitCode::from(2);
+        }
+        Some(Cli::Version) => {
+            println!("ln-hub {}", env!("CARGO_PKG_VERSION"));
+            return ExitCode::SUCCESS;
+        }
+        Some(Cli::Run { config }) => config,
+    };
+    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
+        eprintln!("ln-hub: HOME is not set");
+        return ExitCode::from(2);
+    };
+    let config = match load_config(config, &home) {
+        Ok(config) => config,
+        Err(msg) => {
+            eprintln!("{msg}");
+            return ExitCode::from(2);
+        }
+    };
+    let mut app = App::new(
+        config,
+        Box::new(ProcSystem::new(home.join(".cache/ln-hub/jobs.log"))),
+    );
 
     let mut terminal = ratatui::init();
     let result = run(&mut terminal, &mut app);
     ratatui::restore();
-    result
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("ln-hub: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }

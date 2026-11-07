@@ -62,7 +62,11 @@ impl App {
     pub fn tick(&mut self); // poll jobs, reload palette if colors file changed
     pub fn render(&mut self, f: &mut ratatui::Frame);
     pub fn should_quit(&self) -> bool;
+    pub fn preview_image(&self) -> Option<PreviewImage>; // as of the last render (S13)
 }
+
+pub struct PreviewImage { pub path: PathBuf, pub area: Rect } // hovered image / video thumb
+pub struct ProcSystem { .. } // real System; ProcSystem::new(log: PathBuf) (S13)
 ```
 
 - `Config::default_for(home)` resolves these paths:
@@ -522,8 +526,9 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
 - behavior: The binary runs: `--version`, a real `ProcSystem`, the terminal loop, and the sixel
   preview.
 - seam: CLI `ln-hub [--version|--config <path>]`.
-- test_paths: [tests/s13_cli.rs]
-- owned_paths: [src/main.rs, src/**]
+- test_paths: [tests/s13_cli.rs, tests/s13_proc.rs, tests/s13_keys.rs,
+  tests/s13_preview_image.rs]
+- owned_paths: [src/main.rs, src/**, Cargo.toml]
 - acceptance_criteria:
   - `ln-hub --version` → stdout `ln-hub 0.1.0`, exit 0.
   - `ln-hub --config /nonexistent.toml` → stderr contains `config`, exit 2.
@@ -567,3 +572,54 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     the quit key may not use; `gg` needs a pending-`g` state in `App` (a lone `g` then another
     key does nothing). While a prompt is open they are text. Help can be a status-row or
     overlay list of the active keys.
+- Carried notes resolved here:
+  - Bin loop: `event::poll(100ms)`, then `tick()` and redraw every iteration.
+  - `fs::metadata` runs once in `discover` (`Wallpaper.size: Option<u64>`); the size line is
+    still omitted when it fails.
+  - `ProcSystem` lives in the lib (src/proc.rs); `spawn` appends stdout/stderr to
+    `~/.cache/ln-hub/jobs.log`, creating its dirs.
+  - `gg`/`G`/`?` are `Action::Top/Bottom/Help`; one `Cursor::navigate` serves both panes.
+  - Default config: without `--config`, `$HOME/.config/ln-hub/config.toml` is read, and
+    `Config::default_for` is used if that file does not exist.
+- Decisions:
+  - The CLI is hand-parsed (`--version`, `--config <path>`). Usage errors, config errors and
+    a missing `HOME` exit 2 with `ln-hub: …` on stderr; a terminal error exits 1.
+  - An unusable `jobs.log` falls back to null sinks; the job still runs.
+  - `poll` reports `Failed("exit N")`, or `Failed("killed by signal")` when there is no exit
+    code (unpinned).
+  - A lone `g` swallows the next key, quit and `Esc` included; `gG` does nothing. `g`, `G`,
+    `?` are text in prompts and may not be the quit key.
+  - `?` shows the key help in the status row:
+    `h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  <quit> quit`.
+  - Sixel preview (bin-only src/image_view.rs, ratatui-image 11, `image` png/jpeg/webp/gif):
+    the area is `App::preview_image()` below the preview text. The terminal picker is queried
+    after the first frame (halfblocks fallback). Decoding runs on one worker thread that
+    coalesces to the newest request (older ones answered `Skipped`), downscales sources over
+    1600 px, and turns a panic into `Failed`. Protocols sit in an 8-entry LRU; failed decodes
+    are cached for the session. `Resize::Scale` with a Triangle filter.
+- Deferred:
+  - (S7) `human_size` / `preview_lines` stay in theme_pane.rs; the sixel view does not use
+    them, so there is no second consumer yet. Same for `Kind::label()`.
+  - (S10) `Loaded | Unavailable` and a `No monitors` message.
+- Follow-ups (non-blocking, from review):
+  - The loop redraws every 100 ms when idle; a dirty flag (key, decode reply, tick change,
+    resize) would avoid it.
+  - Sixel resize/encode runs on the UI thread at the first render of each image and on area
+    change; use ratatui-image's threaded protocol if it stalls input in foot.
+  - `App::render` publishes `preview_image` through state; returning it from `render` would
+    drop the ordering coupling.
+  - Key knowledge sits in three places (`CHAR_KEYS`, the `g` prefix in `App`, the help
+    string); a `BINDINGS` table and a small key parser would unify them. `?` overwrites an
+    `Applied…` status.
+  - `ImageView::new` queries the terminal itself; taking a `Picker` would make it testable
+    with `TestBackend`. No unit test for the LRU.
+  - `ProcSystem` never prunes finished `Child` handles; `jobs.log` has no per-job header and
+    grows without bound.
+  - `parse_args` could be a `while let` loop with specific messages and `--help`.
+- Manual check in the QEMU VM (foot), in addition to the acceptance list. Both lists are carried
+  over to the VM test in the dotfiles repo:
+  - the sixel image disappears when moving off an image and redraws correctly on resize;
+  - j/k through many large images stays responsive;
+  - the help line at 80 columns (it truncates);
+  - monitor rows at 80 columns (S9) and the status / silent Enter while a job runs (S10);
+  - a terminal that does not answer the picker query starts with halfblocks, not a hang.

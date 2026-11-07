@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use ratatui::Frame;
-use ratatui::crossterm::event::KeyEvent;
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
@@ -9,9 +9,9 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use crate::config::{Config, Module};
 use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
-use crate::pane::{Action, PaneAction, Program};
+use crate::pane::{Action, PaneAction, Program, TOP_PREFIX};
 use crate::system::{JobId, JobState, System};
-use crate::theme_pane::ThemePane;
+use crate::theme_pane::{PreviewImage, ThemePane};
 
 /// The program that applies wallpapers and fonts.
 const THEMECTL: &str = "ln-themectl";
@@ -46,6 +46,10 @@ pub struct App {
     selected: usize,
     job: Option<Job>,
     status: Option<String>,
+    /// A `g` was pressed; the next key completes or cancels `gg`.
+    top_pending: bool,
+    /// The image offered by the last `render`.
+    preview_image: Option<PreviewImage>,
     quit: bool,
 }
 
@@ -66,6 +70,8 @@ impl App {
             selected: 0,
             job: None,
             status: None,
+            top_pending: false,
+            preview_image: None,
             quit: false,
         }
     }
@@ -77,12 +83,41 @@ impl App {
             self.run(pane_action);
             return;
         }
+        if std::mem::take(&mut self.top_pending) {
+            if key.code == KeyCode::Char(TOP_PREFIX) {
+                self.handle_action(Action::Top);
+            }
+            return;
+        }
+        if key.code == KeyCode::Char(TOP_PREFIX) {
+            self.top_pending = true;
+            return;
+        }
         let Some(action) = Action::from_key(key.code, self.quit_key) else {
             return;
         };
+        self.handle_action(action);
+    }
+
+    fn handle_action(&mut self, action: Action) {
         let pane_action = match (self.focused_module(), action) {
             (_, Action::Quit) => {
                 self.quit = true;
+                None
+            }
+            (_, Action::Help) => {
+                self.status = Some(format!(
+                    "h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  {} quit",
+                    self.quit_key
+                ));
+                None
+            }
+            (None, Action::Top) => {
+                self.selected = 0;
+                None
+            }
+            (None, Action::Bottom) => {
+                self.selected = self.modules.len().saturating_sub(1);
                 None
             }
             (_, Action::Right) => {
@@ -136,6 +171,11 @@ impl App {
         }
     }
 
+    /// The image to draw over the Preview block, as of the last `render`.
+    pub fn preview_image(&self) -> Option<PreviewImage> {
+        self.preview_image.clone()
+    }
+
     pub fn render(&mut self, f: &mut Frame) {
         let highlight = self.palette.highlight();
         let theme_active = self.focused_module() == Some(Module::Theme);
@@ -159,14 +199,18 @@ impl App {
         let mut state = ListState::default().with_selected(Some(self.selected));
         f.render_stateful_widget(list, modules_area, &mut state);
 
-        match self.focused_module() {
+        self.preview_image = match self.focused_module() {
             Some(Module::Theme) => self.theme.render(f, items_area, preview_area, highlight),
-            Some(Module::Monitors) => self.monitors.render(f, items_area, preview_area, highlight),
+            Some(Module::Monitors) => {
+                self.monitors.render(f, items_area, preview_area, highlight);
+                None
+            }
             None => {
                 f.render_widget(Block::bordered().title("Items"), items_area);
                 f.render_widget(Block::bordered().title("Preview"), preview_area);
+                None
             }
-        }
+        };
 
         self.render_status(f, status_area, theme_active);
     }
