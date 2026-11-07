@@ -2,16 +2,21 @@
 //! the Hyprland env file.
 
 use std::fs;
+use std::ops::RangeInclusive;
 use std::path::Path;
 
 const DEFAULT_NAME: &str = "Terminess Nerd Font Propo";
 const DEFAULT_SIZE: &str = "16";
+/// Font sizes accepted from the size prompt.
+const FONT_SIZE_RANGE: RangeInclusive<u32> = 6..=72;
+/// Shown when a font size is not an integer in `FONT_SIZE_RANGE`.
+pub(crate) const FONT_SIZE_ERROR: &str = "Font size must be 6-72";
 
 /// The font name and size as the env file records them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Font {
-    pub(crate) name: String,
-    pub(crate) size: String,
+    name: String,
+    size: String,
 }
 
 impl Font {
@@ -29,6 +34,14 @@ impl Font {
     pub(crate) fn summary(&self) -> String {
         format!("Font: {}, size {}", self.name, self.size)
     }
+}
+
+/// `text` as a font size: an integer within `FONT_SIZE_RANGE`.
+pub(crate) fn parse_size(text: &str) -> Option<u32> {
+    text.trim()
+        .parse::<u32>()
+        .ok()
+        .filter(|n| FONT_SIZE_RANGE.contains(n))
 }
 
 /// The value of the first `hl.env("key", "value")` line for `key`.

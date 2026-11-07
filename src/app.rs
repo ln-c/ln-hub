@@ -1,21 +1,17 @@
-use std::path::PathBuf;
-
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::text::Line;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::config::{Config, Module};
-use crate::font::Font;
+use crate::font;
 use crate::style::HIGHLIGHT;
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
 
 /// The program that applies wallpapers and fonts.
 const THEMECTL: &str = "ln-themectl";
-/// Shown when a font size is not an integer in `FONT_SIZE_RANGE`.
-const FONT_SIZE_ERROR: &str = "Font size must be 6-72";
-const FONT_SIZE_RANGE: std::ops::RangeInclusive<u32> = 6..=72;
 
 /// An `ln-themectl` job that has been spawned and not yet observed as finished.
 struct Apply {
@@ -46,8 +42,7 @@ impl Prompt {
 }
 
 /// Top-level application state: the module column and its selection, the Theme items pane,
-/// the font shown in the Theme view, the in-flight apply, the open prompt, the status bar
-/// message, and the quit flag.
+/// the in-flight apply, the open prompt, the status bar message, and the quit flag.
 pub struct App {
     modules: Vec<Module>,
     quit_key: char,
@@ -55,8 +50,6 @@ pub struct App {
     sys: Box<dyn System>,
     items_focused: bool,
     selected: usize,
-    env_file: PathBuf,
-    font: Font,
     apply: Option<Apply>,
     prompt: Option<Prompt>,
     status: Option<String>,
@@ -68,12 +61,14 @@ impl App {
         App {
             modules: cfg.modules,
             quit_key: cfg.keymap.quit,
-            theme: ThemePane::new(cfg.wallpaper_dir, &cfg.current_wallpaper_file),
+            theme: ThemePane::new(
+                cfg.wallpaper_dir,
+                &cfg.current_wallpaper_file,
+                &cfg.hypr_env_file,
+            ),
             sys,
             items_focused: false,
             selected: 0,
-            font: Font::load(&cfg.hypr_env_file),
-            env_file: cfg.hypr_env_file,
             apply: None,
             prompt: None,
             status: None,
@@ -112,8 +107,7 @@ impl App {
         match self.sys.poll(apply.job) {
             JobState::Running => self.apply = Some(apply),
             JobState::Done => {
-                self.theme.reload_current();
-                self.font = Font::load(&self.env_file);
+                self.theme.reload();
                 self.status = Some(format!("Applied {}", apply.name));
             }
             JobState::Failed(reason) => self.status = Some(format!("Apply failed: {reason}")),
@@ -121,6 +115,7 @@ impl App {
     }
 
     pub fn render(&mut self, f: &mut Frame) {
+        let theme_active = self.items_focused && self.theme_focused();
         let [main_area, status_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(f.area());
         let [modules_area, items_area, preview_area] = Layout::horizontal([
@@ -143,7 +138,7 @@ impl App {
 
         let items_block = Block::bordered().title("Items");
         let preview_block = Block::bordered().title("Preview");
-        if self.items_focused && self.theme_focused() {
+        if theme_active {
             self.theme.render(f, items_area, items_block);
             self.theme.render_preview(f, preview_area, preview_block);
         } else {
@@ -151,16 +146,20 @@ impl App {
             f.render_widget(preview_block, preview_area);
         }
 
-        let font_text = if self.items_focused && self.theme_focused() {
-            self.font.summary()
+        self.render_status(f, status_area, theme_active);
+    }
+
+    /// The status row: the open prompt or the status message on the left, and the font summary
+    /// on the right while the Theme items are focused.
+    fn render_status(&self, f: &mut Frame, area: Rect, theme_active: bool) {
+        let font_text = if theme_active {
+            self.theme.font_summary()
         } else {
             String::new()
         };
-        let [left_area, font_area] = Layout::horizontal([
-            Constraint::Fill(1),
-            Constraint::Length(font_text.chars().count() as u16),
-        ])
-        .areas(status_area);
+        let font_width = u16::try_from(Line::from(font_text.as_str()).width()).unwrap_or(u16::MAX);
+        let [left_area, font_area] =
+            Layout::horizontal([Constraint::Fill(1), Constraint::Length(font_width)]).areas(area);
         let left = match &self.prompt {
             Some(prompt) => prompt.line(),
             None => self.status.clone().unwrap_or_default(),
@@ -206,12 +205,12 @@ impl App {
                     self.spawn_themectl(&["-f", name], format!("font name {name}"));
                 }
             }
-            Prompt::FontSize(text) => match parse_font_size(&text) {
+            Prompt::FontSize(text) => match font::parse_size(&text) {
                 Some(size) => {
                     let size = size.to_string();
                     self.spawn_themectl(&["-s", size.as_str()], format!("font size {size}"));
                 }
-                None => self.status = Some(FONT_SIZE_ERROR.to_owned()),
+                None => self.status = Some(font::FONT_SIZE_ERROR.to_owned()),
             },
         }
     }
@@ -223,7 +222,7 @@ impl App {
                 self.status = Some(format!("Applying {name}…"));
                 self.apply = Some(Apply { job, name });
             }
-            Err(e) => self.status = Some(format!("ln-themectl not found: {e}")),
+            Err(e) => self.status = Some(format!("{THEMECTL} not found: {e}")),
         }
     }
 
@@ -236,12 +235,4 @@ impl App {
         let path = w.path.to_string_lossy().into_owned();
         self.spawn_themectl(&["-w", path.as_str()], name);
     }
-}
-
-/// `text` as a font size: an integer within `FONT_SIZE_RANGE`.
-fn parse_font_size(text: &str) -> Option<u32> {
-    text.trim()
-        .parse::<u32>()
-        .ok()
-        .filter(|n| FONT_SIZE_RANGE.contains(n))
 }
