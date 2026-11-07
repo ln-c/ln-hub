@@ -3,8 +3,9 @@
 //!
 //! Rendered on a 120x24 buffer (as in S10): the module column is x 0..20 and the items column is
 //! x 20..53. The highlight observable is the cell holding the first letter of the highlighted row
-//! (`Theme` in the module column; `img1.png` in the Theme items). Only the highlight bg is pinned,
-//! never fg. The built-in fallback is today's style: REVERSED with bg `Color::Reset`.
+//! (`Theme` in the module column; `img1.png` in the Theme items). A palette highlight is bg=color4
+//! with fg=the palette's `background`; the built-in fallback is today's style: REVERSED with fg and
+//! bg `Color::Reset`.
 //!
 //! Only `System` is faked; `colors.sh` and the wallpaper dir are real temp files. Every mtime is
 //! set explicitly with `set_modified`, so fs timestamp granularity cannot make a test flaky.
@@ -31,6 +32,8 @@ const ROWS: [&str; 2] = ["img1.png", "img2.png"];
 
 const AABBCC: Color = Color::Rgb(0xaa, 0xbb, 0xcc);
 const C112233: Color = Color::Rgb(0x11, 0x22, 0x33);
+const BG0D0E0F: Color = Color::Rgb(0x0d, 0x0e, 0x0f);
+const BG305070: Color = Color::Rgb(0x30, 0x50, 0x70);
 
 /// A fixed, arbitrary mtime base; `t(n)` is strictly newer for a larger `n`.
 fn t(n: u64) -> SystemTime {
@@ -40,8 +43,13 @@ fn t(n: u64) -> SystemTime {
 /// A full, valid wallust `colors.sh` whose `color4` value is `color4` (written verbatim), with
 /// `skip` dropping the line of that key.
 fn colors_sh(color4: &str, skip: Option<&str>) -> String {
+    colors_sh_bg(color4, "#170000", skip)
+}
+
+/// Like `colors_sh`, with the `background` value also given (written verbatim).
+fn colors_sh_bg(color4: &str, background: &str, skip: Option<&str>) -> String {
     let mut keys: Vec<(String, String)> = vec![
-        ("background".into(), "#170000".into()),
+        ("background".into(), background.into()),
         ("foreground".into(), "#e0d0c0".into()),
     ];
     for i in 0..16 {
@@ -105,6 +113,13 @@ fn highlight_bgs(app: &mut App) -> (Color, Color) {
     (module, item_style(app).1)
 }
 
+/// Highlight fg of the module row and (after `l`) of the item row, in that order.
+fn highlight_fgs(app: &mut App) -> (Color, Color) {
+    let module = module_style(app).0;
+    press(app, 'l');
+    (module, item_style(app).0)
+}
+
 fn items_hit(buf: &Buffer, text: &str) -> Option<(u16, u16)> {
     items_hit_within(buf, text, ITEMS_X_START, ITEMS_X_END)
 }
@@ -121,6 +136,36 @@ fn palette_color4_is_the_highlight_bg_in_module_and_items_columns() {
     assert_eq!(item_style(&mut a).1, AABBCC, "items highlight bg");
     let buf = draw(&mut a);
     assert_only_highlighted(&buf, &ROWS, "img1.png", items_hit);
+}
+
+#[test]
+fn palette_background_is_the_highlight_fg_in_module_and_items_columns() {
+    // Catches: a highlight that sets only bg=color4 and leaves fg at the terminal default (text
+    // unreadable on light/dark color4), or an fg taken from `foreground` or another slot.
+    let colors = colors_path("s11-fg");
+    write_colors(&colors, &colors_sh_bg("#aabbcc", "#0d0e0f", None), 0);
+    let mut a = app_with_colors("s11-fg", &colors);
+    let module = module_style(&mut a);
+    assert_eq!((module.0, module.1), (BG0D0E0F, AABBCC), "module fg/bg");
+    press(&mut a, 'l');
+    let item = item_style(&mut a);
+    assert_eq!((item.0, item.1), (BG0D0E0F, AABBCC), "items fg/bg");
+}
+
+#[test]
+fn tick_reload_updates_the_highlight_fg_to_the_new_background() {
+    // Catches: a reload that refreshes bg (color4) but keeps the old fg (background), in either
+    // column.
+    let colors = colors_path("s11-fgreload");
+    write_colors(&colors, &colors_sh_bg("#aabbcc", "#0d0e0f", None), 0);
+    let mut a = app_with_colors("s11-fgreload", &colors);
+    assert_eq!(highlight_fgs(&mut a), (BG0D0E0F, BG0D0E0F));
+
+    write_colors(&colors, &colors_sh_bg("#aabbcc", "#305070", None), 1);
+    a.tick();
+    assert_eq!(item_style(&mut a).0, BG305070, "items highlight fg");
+    assert_eq!(module_style(&mut a).0, BG305070, "module highlight fg");
+    assert_eq!(item_style(&mut a).1, AABBCC, "bg unchanged");
 }
 
 #[test]
@@ -192,17 +237,19 @@ fn a_second_rewrite_with_the_already_seen_mtime_is_ignored_after_a_reload() {
 
 fn assert_fallback(app: &mut App) {
     let (fg, bg, m) = module_style(app);
+    assert_eq!(fg, Color::Reset, "module fallback fg");
     assert_eq!(bg, Color::Reset, "module fallback bg");
     assert!(
         m.contains(Modifier::REVERSED),
-        "module fallback must be REVERSED, got fg {fg:?} {m:?}"
+        "module fallback must be REVERSED, got {m:?}"
     );
     press(app, 'l');
     let (fg, bg, m) = item_style(app);
+    assert_eq!(fg, Color::Reset, "items fallback fg");
     assert_eq!(bg, Color::Reset, "items fallback bg");
     assert!(
         m.contains(Modifier::REVERSED),
-        "items fallback must be REVERSED, got fg {fg:?} {m:?}"
+        "items fallback must be REVERSED, got {m:?}"
     );
     let buf = draw(app);
     assert_only_highlighted(&buf, &ROWS, "img1.png", items_hit);
