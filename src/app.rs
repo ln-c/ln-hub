@@ -1,4 +1,5 @@
 use std::io::ErrorKind;
+use std::time::{Duration, Instant};
 
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -18,6 +19,24 @@ const THEMECTL: &str = "ln-themectl";
 
 /// The program that enables and disables monitors.
 const MONITORCTL: &str = "ln-monitorctl";
+
+/// How long `Ready` stays in the status row after the startup query finishes.
+const READY_FOR: Duration = Duration::from_secs(1);
+
+/// The startup text of the status row; the lowest-priority left-side text.
+enum Startup {
+    Initializing,
+    Ready { until: Instant },
+}
+
+impl Startup {
+    fn text(&self) -> &'static str {
+        match self {
+            Self::Initializing => "Initializing…",
+            Self::Ready { .. } => "Ready",
+        }
+    }
+}
 
 /// What to refresh once a job has finished.
 enum OnDone {
@@ -46,6 +65,7 @@ pub struct App {
     selected: usize,
     job: Option<Job>,
     status: Option<String>,
+    startup: Option<Startup>,
     /// A `g` was pressed; the next key completes or cancels `gg`.
     top_pending: bool,
     /// The image offered by the last `render`.
@@ -72,6 +92,7 @@ impl App {
             selected: 0,
             job: None,
             status: None,
+            startup: None,
             top_pending: false,
             preview_image: None,
             popup: None,
@@ -80,6 +101,9 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
+        if matches!(self.startup, Some(Startup::Ready { .. })) {
+            self.startup = None;
+        }
         if let Some(popup) = self.popup.take() {
             match key.code {
                 KeyCode::Enter if popup.confirm.is_some() => self.run(popup.confirm),
@@ -168,8 +192,28 @@ impl App {
         self.quit
     }
 
+    /// The startup terminal query began: the status row shows `Initializing…`.
+    pub fn init_started(&mut self) {
+        self.startup = Some(Startup::Initializing);
+    }
+
+    /// The startup terminal query finished: the status row shows `Ready` for a second.
+    pub fn init_finished(&mut self, now: Instant) {
+        self.startup = Some(Startup::Ready {
+            until: now + READY_FOR,
+        });
+    }
+
     /// Polls the in-flight job; once it has finished, reports the outcome and releases the job.
     pub fn tick(&mut self) {
+        self.tick_at(Instant::now());
+    }
+
+    /// `tick` with an injectable clock: also expires `Ready`.
+    pub fn tick_at(&mut self, now: Instant) {
+        if matches!(self.startup, Some(Startup::Ready { until }) if now >= until) {
+            self.startup = None;
+        }
         self.palette.reload_if_changed();
         let Some(job) = self.job.take() else {
             return;
@@ -250,6 +294,7 @@ impl App {
             .theme
             .prompt_line()
             .or_else(|| self.status.clone())
+            .or_else(|| self.startup.as_ref().map(|s| s.text().to_string()))
             .unwrap_or_default();
         f.render_widget(Paragraph::new(left), left_area);
         f.render_widget(Paragraph::new(font_text), font_area);

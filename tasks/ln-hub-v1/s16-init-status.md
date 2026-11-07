@@ -1,7 +1,7 @@
 ---
 spec: ../../specs/ln-hub-v1.md
 slice_id: S16-init-status
-status: planned
+status: green
 ---
 
 ### Slice 16
@@ -63,6 +63,7 @@ status: planned
     else startup text. So `Initializing…` / `Ready` can never overwrite a job, help or error
     status, and they need no restore step when they end. A status message set while the startup
     text is up simply hides it.
+  - An open popup does not by itself show or clear the startup text; the first-key rule still applies to a key the popup receives (clarified in review).
   - `init_started` and `init_finished` are idempotent; `init_finished` without `init_started`
     shows `Ready` as well. A key delivered to `handle_key` while `Initializing…` is up does not
     end it (the bin never delivers one: it does not read keys during the query). Unpinned.
