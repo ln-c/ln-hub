@@ -1,5 +1,6 @@
 //! The Theme items pane: the wallpaper list with its applied-wallpaper mark and cursor.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use ratatui::Frame;
@@ -7,7 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::style::HIGHLIGHT;
-use crate::wallpaper::{self, Wallpaper};
+use crate::wallpaper::{self, Kind, Wallpaper};
 
 /// Row prefix for the applied wallpaper.
 const CURRENT_MARK: &str = "● ";
@@ -22,6 +23,47 @@ fn is_current(current: Option<&Path>, w: &Wallpaper) -> bool {
 /// Reads the applied wallpaper's path from `current_file`.
 fn load_current(current_file: &Path) -> Option<PathBuf> {
     wallpaper::read_current(current_file)
+}
+
+/// `bytes` in `ls -h` style: a plain count below 1 KiB, otherwise a power of 1024 with a unit
+/// letter, rounded up. Values under 10 keep one decimal, so 1024 is `1.0K`.
+fn human_size(bytes: u64) -> String {
+    const UNITS: [char; 5] = ['K', 'M', 'G', 'T', 'P'];
+    if bytes < 1024 {
+        return bytes.to_string();
+    }
+    let b = u128::from(bytes);
+    let mut unit = 0;
+    let mut scale: u128 = 1024;
+    while unit + 1 < UNITS.len() && b.div_ceil(scale) >= 1024 {
+        scale *= 1024;
+        unit += 1;
+    }
+    let tenths = (b * 10).div_ceil(scale);
+    if tenths < 100 {
+        format!("{}.{}{}", tenths / 10, tenths % 10, UNITS[unit])
+    } else {
+        format!("{}{}", b.div_ceil(scale), UNITS[unit])
+    }
+}
+
+/// The detail lines for `w`: its name, size when the file can be read, kind, and thumbnail.
+fn preview_lines(w: &Wallpaper) -> Vec<String> {
+    let mut lines = vec![w.name.clone()];
+    if let Ok(meta) = fs::metadata(&w.path) {
+        lines.push(human_size(meta.len()));
+    }
+    lines.push(
+        match w.kind {
+            Kind::Image => "image",
+            Kind::Video => "video",
+        }
+        .to_owned(),
+    );
+    if let Some(file) = w.thumb.as_ref().and_then(|t| t.file_name()) {
+        lines.push(format!("thumb: {}", file.to_string_lossy()));
+    }
+    lines
 }
 
 pub(crate) struct ThemePane {
@@ -92,5 +134,14 @@ impl ThemePane {
         let list = List::new(rows).block(block).highlight_style(HIGHLIGHT);
         let mut state = ListState::default().with_selected(Some(self.cursor));
         f.render_stateful_widget(list, area, &mut state);
+    }
+
+    /// Draws the details of the wallpaper under the cursor inside `block`; empty when there is none.
+    pub(crate) fn render_preview(&self, f: &mut Frame, area: Rect, block: Block) {
+        let text = self
+            .selected()
+            .map(|w| preview_lines(w).join("\n"))
+            .unwrap_or_default();
+        f.render_widget(Paragraph::new(text).block(block), area);
     }
 }

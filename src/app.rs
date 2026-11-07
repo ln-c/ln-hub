@@ -97,12 +97,14 @@ impl App {
         f.render_stateful_widget(list, modules_area, &mut state);
 
         let items_block = Block::bordered().title("Items");
+        let preview_block = Block::bordered().title("Preview");
         if self.items_focused && self.theme_focused() {
             self.theme.render(f, items_area, items_block);
+            self.theme.render_preview(f, preview_area, preview_block);
         } else {
             f.render_widget(items_block, items_area);
+            f.render_widget(preview_block, preview_area);
         }
-        f.render_widget(Block::bordered().title("Preview"), preview_area);
 
         if let Some(status) = &self.status {
             f.render_widget(Paragraph::new(status.as_str()), status_area);
