@@ -1,4 +1,4 @@
-//! Wallpaper discovery for the Theme items column.
+//! Wallpaper discovery and the applied-wallpaper file for the Theme items column.
 //!
 //! Lists images and videos in the wallpaper directory: top-level entries first, then entries
 //! from one subdirectory level as `subdir/name`. Names sort naturally and case-insensitively;
@@ -62,6 +62,15 @@ pub(crate) fn discover(dir: &Path) -> Vec<Wallpaper> {
         wallpapers.extend(list_media(&sub.path, Some(&sub.name), &files));
     }
     wallpapers
+}
+
+/// The path recorded in the applied-wallpaper file. Only the line terminator is stripped, so a
+/// path's own trailing whitespace survives. A missing, unreadable, non-UTF-8, or empty file
+/// yields `None`.
+pub(crate) fn read_current(file: &Path) -> Option<PathBuf> {
+    let content = fs::read_to_string(file).ok()?;
+    let line = content.trim_end_matches(['\n', '\r']);
+    (!line.is_empty()).then(|| PathBuf::from(line))
 }
 
 /// The wallpapers among `files`, the file names directly in `dir`, naturally sorted. `prefix` is

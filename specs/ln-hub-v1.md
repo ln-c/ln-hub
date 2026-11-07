@@ -234,7 +234,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     beside it is still listed. (Its path could not round-trip through a display name.)
 - Refactor (no behavior change, after GREEN): `wallpaper::discover` returns `Vec<Wallpaper>`
   (`name`, `path`, `kind`, `thumb`) so S5 and S7 reuse the pairing; classify each file once.
-  Extracting a Theme items pane from `App` is deferred to S5, where the cursor arrives.
+  Extracting a Theme items pane from `App` is deferred to S5, where the cursor arrives (done in
+  S5: `src/theme_pane.rs`).
 
 ### Slice 5
 - slice_id: S5-current-wallpaper
