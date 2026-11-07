@@ -254,9 +254,11 @@ fn row_of(buf: &Buffer, name: &str) -> u16 {
 }
 
 #[test]
-fn done_job_moves_current_mark_to_applied_wallpaper_and_keeps_cursor() {
-    // Catches: the app never re-reading current_wallpaper after a Done job (the `●` stays on the
-    // old wallpaper), or the reload re-running preselect and yanking the cursor off img2.
+fn done_job_moves_current_mark_to_wallpaper_in_file_and_does_not_move_cursor() {
+    // Catches: the app never re-reading current_wallpaper after a Done job (the `●` stays on img1),
+    // or the reload re-running preselect and yanking the cursor onto the new current (img3) when
+    // it was on img2. The file deliberately names img3, not the applied img2, so the cursor
+    // staying on img2 cannot be explained by a preselect landing there.
     let sys = FakeSystem::new();
     sys.set_job_state(JobState::Running);
     let (mut app, dir, cur) = app_current_img1_cursor_img2("s6-reload", &sys);
@@ -270,16 +272,16 @@ fn done_job_moves_current_mark_to_applied_wallpaper_and_keeps_cursor() {
 
     enter(&mut app);
     app.tick();
-    // Simulate ln-themectl recording the new current wallpaper.
-    fs::write(&cur, format!("{}/img2.png\n", dir.display())).unwrap();
+    // Simulate ln-themectl recording a different wallpaper (img3) as current.
+    fs::write(&cur, format!("{}/img3.png\n", dir.display())).unwrap();
     sys.set_job_state(JobState::Done);
     app.tick();
 
     let buf = draw(&mut app);
     assert_eq!(
         mark_rows(&buf),
-        vec![row_of(&buf, "img2.png")],
-        "exactly one `●`, on the img2.png row; buffer:\n{}",
+        vec![row_of(&buf, "img3.png")],
+        "exactly one `●`, on the img3.png row (none on img1/img2); buffer:\n{}",
         dump(&buf)
     );
     assert_only_highlighted(&mut app, "img2.png");
