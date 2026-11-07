@@ -356,6 +356,32 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - `s`, typing `abc`, then `Enter` → no spawn, and the status shows `Font size must be 6-72`.
     The same happens for `5` and `73`.
   - `Esc` during input → no spawn, and the prompt closes.
+  - (Review follow-up) Pinned:
+    - A Done job re-reads env.lua; a Failed job does not.
+    - Every key typed into an open prompt is text, including the quit key.
+    - `f` / `s` work only with the Theme items focused.
+    - `Enter` in a prompt waits (no spawn, prompt kept) while a job is in flight.
+    - `Backspace` edits the prompt text.
+    - Name and size are trimmed, and an empty name does nothing.
+    - The prompts are labelled `Font name:` / `Font size:`.
+    - Font jobs show `Applying font size 18…` / `Applied font size 18` (and the same for `font name`).
+    - The font line is hidden until the items column is focused.
+- Review notes carried to later slices:
+  - Before S12: route `f` / `s` and the prompt through the Theme pane (`Prompt`,
+    `handle_prompt_key`, `submit_prompt` are Theme concerns living in `App`). This joins the
+    S6 `PaneAction` note.
+  - When a third prompt appears (the S12 filter): make `Prompt` a `{ kind, text }` struct to
+    end the repeated `FontName | FontSize` switch. Build the themectl args and status label
+    from one `Prompt::command()` instead of stating the value twice in `submit_prompt`. If
+    editing grows (cursor, paste), extract a `TextInput`.
+  - S9: the font line is not pinned for a non-Theme module. Pin it when the second pane lands.
+    Also pin what an open prompt does when `tick` finishes a job.
+  - `font.rs` `env_value`: a duplicate `hl.env` key resolves to the first line, which is
+    unpinned. Exact `hl.env("K", "v")` spacing is required and escapes are not handled. That
+    is fine for a file `ln-themectl` writes.
+  - `parse_size` accepts `+16`, which is harmless because the size is re-serialised.
+  - The S6 spawn-error wording note (`ln-themectl not found: …` for every error) now also
+    covers font spawns.
 
 ### Slice 9
 - slice_id: S9-monitor-list
