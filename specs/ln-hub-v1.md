@@ -234,7 +234,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     beside it is still listed. (Its path could not round-trip through a display name.)
 - Refactor (no behavior change, after GREEN): `wallpaper::discover` returns `Vec<Wallpaper>`
   (`name`, `path`, `kind`, `thumb`) so S5 and S7 reuse the pairing; classify each file once.
-  Extracting a Theme items pane from `App` is deferred to S5, where the cursor arrives.
+  Extracting a Theme items pane from `App` is deferred to S5, where the cursor arrives (done in
+  S5: `src/theme_pane.rs`).
 
 ### Slice 5
 - slice_id: S5-current-wallpaper
@@ -246,6 +247,21 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - `current_wallpaper` file contains `<dir>/img2.png\n` → the `img2.png` row contains `●` and is
     highlighted on entering Theme.
   - A missing file → no `●`, and the highlight is on the first item.
+  - (Review follow-up) A `current_wallpaper` path not in the list (e.g. same file name outside
+    the wallpaper dir) → no `●`, highlight on the first item.
+- Review notes carried to later slices:
+  - S6: add `ThemePane::selected() -> Option<&Wallpaper>` (None on an empty list), route `j`/`k`
+    to the focused column, and re-read `current_wallpaper` after a job is `Done` so `●` moves.
+  - S6: `App` will dispatch both `handle_key` and items render per `Module`; replace the
+    `Module::Theme` `if` with one `match` (or a pane trait once a second pane exists, not before).
+  - The slice that adds `j`/`k` in items: pick up the S3.1 deferral (key-conflict validation and
+    an `Action` keymap table).
+  - If `current_wallpaper` is reloaded (S6 / `tick`), reuse one private load fn in `ThemePane`.
+  - S6 (`j`/`k` in items): add `ThemePane::move_cursor(delta)` that clamps against the list
+    length, so `App` never touches the cursor.
+  - Incidental `wallpaper::read_current` behavior (accepted, not yet pinned by tests): only the
+    line terminator (`\n`/`\r`) is stripped, so a path's own trailing spaces are kept; an empty or
+    non-UTF-8 file means no current wallpaper.
 
 ### Slice 6
 - slice_id: S6-apply-wallpaper

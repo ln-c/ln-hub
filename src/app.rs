@@ -1,22 +1,19 @@
-use std::path::PathBuf;
-
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Modifier, Style};
-use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, List, ListItem, ListState};
 
 use crate::config::{Config, Module};
+use crate::style::HIGHLIGHT;
 use crate::system::System;
-use crate::wallpaper::{self, Wallpaper};
+use crate::theme_pane::ThemePane;
 
-/// Top-level application state: the module column, its selection, the Theme wallpaper list
+/// Top-level application state: the module column and its selection, the Theme items pane,
 /// and the quit flag.
 pub struct App {
     modules: Vec<Module>,
     quit_key: char,
-    wallpaper_dir: PathBuf,
-    wallpapers: Vec<Wallpaper>,
+    theme: ThemePane,
     items_focused: bool,
     selected: usize,
     quit: bool,
@@ -24,12 +21,10 @@ pub struct App {
 
 impl App {
     pub fn new(cfg: Config, _sys: Box<dyn System>) -> App {
-        let wallpapers = wallpaper::discover(&cfg.wallpaper_dir);
         App {
             modules: cfg.modules,
             quit_key: cfg.keymap.quit,
-            wallpaper_dir: cfg.wallpaper_dir,
-            wallpapers,
+            theme: ThemePane::new(cfg.wallpaper_dir, &cfg.current_wallpaper_file),
             items_focused: false,
             selected: 0,
             quit: false,
@@ -67,23 +62,13 @@ impl App {
             .collect();
         let list = List::new(items)
             .block(Block::bordered().title("Modules"))
-            .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+            .highlight_style(HIGHLIGHT);
         let mut state = ListState::default().with_selected(Some(self.selected));
         f.render_stateful_widget(list, modules_area, &mut state);
 
         let items_block = Block::bordered().title("Items");
         if self.items_focused && self.modules.get(self.selected) == Some(&Module::Theme) {
-            if self.wallpapers.is_empty() {
-                let msg = format!("No wallpapers in {}", self.wallpaper_dir.display());
-                f.render_widget(Paragraph::new(msg).block(items_block), items_area);
-            } else {
-                let rows: Vec<ListItem> = self
-                    .wallpapers
-                    .iter()
-                    .map(|w| ListItem::new(w.name.as_str()))
-                    .collect();
-                f.render_widget(List::new(rows).block(items_block), items_area);
-            }
+            self.theme.render(f, items_area, items_block);
         } else {
             f.render_widget(items_block, items_area);
         }
