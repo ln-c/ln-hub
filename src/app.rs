@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use crate::config::{Config, Module};
 use crate::font;
 use crate::monitor::{MonitorsPane, Toggle};
-use crate::style::LiveHighlight;
+use crate::palette::LivePalette;
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
 
@@ -62,7 +62,7 @@ pub struct App {
     theme: ThemePane,
     monitors: MonitorsPane,
     sys: Box<dyn System>,
-    highlight: LiveHighlight,
+    palette: LivePalette,
     items_focused: bool,
     selected: usize,
     job: Option<Job>,
@@ -83,7 +83,7 @@ impl App {
             ),
             monitors: MonitorsPane::new(),
             sys,
-            highlight: LiveHighlight::load(cfg.colors_file),
+            palette: LivePalette::load(cfg.colors_file),
             items_focused: false,
             selected: 0,
             job: None,
@@ -128,7 +128,7 @@ impl App {
 
     /// Polls the in-flight job; once it has finished, reports the outcome and releases the job.
     pub fn tick(&mut self) {
-        self.highlight.reload_if_changed();
+        self.palette.reload_if_changed();
         let Some(job) = self.job.take() else {
             return;
         };
@@ -146,7 +146,7 @@ impl App {
     }
 
     pub fn render(&mut self, f: &mut Frame) {
-        let highlight = self.highlight.style();
+        let highlight = self.palette.highlight();
         let theme_active = self.focused_module() == Some(Module::Theme);
         let [main_area, status_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(f.area());

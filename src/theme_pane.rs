@@ -22,11 +22,6 @@ fn is_current(current: Option<&Path>, w: &Wallpaper) -> bool {
     current == Some(w.path.as_path())
 }
 
-/// Reads the applied wallpaper's path from `current_file`.
-fn load_current(current_file: &Path) -> Option<PathBuf> {
-    wallpaper::read_current(current_file)
-}
-
 /// `bytes` in `ls -h` style: a plain count below 1 KiB, otherwise a power of 1024 with a unit
 /// letter, rounded up. Values under 10 keep one decimal, so 1024 is `1.0K`.
 fn human_size(bytes: u64) -> String {
@@ -86,7 +81,7 @@ pub(crate) struct ThemePane {
 impl ThemePane {
     pub(crate) fn new(wallpaper_dir: PathBuf, current_file: &Path, env_file: &Path) -> ThemePane {
         let wallpapers = wallpaper::discover(&wallpaper_dir);
-        let current = load_current(current_file);
+        let current = wallpaper::read_current(current_file);
         let cursor = wallpapers
             .iter()
             .position(|w| is_current(current.as_deref(), w))
@@ -105,7 +100,7 @@ impl ThemePane {
     /// Re-reads the applied wallpaper so the `●` mark moves, and the font from the env file; the
     /// cursor is left where it is.
     pub(crate) fn reload(&mut self) {
-        self.current = load_current(&self.current_file);
+        self.current = wallpaper::read_current(&self.current_file);
         self.font = Font::load(&self.env_file);
     }
 
