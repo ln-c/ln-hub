@@ -279,25 +279,31 @@ impl App {
         }
     }
 
-    /// The status row: the open prompt or the status message on the left, and the font summary
-    /// on the right while the Theme items are focused.
+    /// The status row: the left text and, while the Theme items are focused, the font summary F.
+    ///
+    /// Left text: the open prompt, else the status message (this includes the help line), else
+    /// the startup status, else empty.
+    /// F rule: with an empty left text F is right-aligned, clipped by the row edge if wider than
+    /// the row (leading cells kept); otherwise F is drawn only when it fits beside the left text
+    /// with one blank cell between them, and is omitted whole when it does not.
     fn render_status(&self, f: &mut Frame, area: Rect, theme_active: bool) {
         let font_text = if theme_active {
             self.theme.font_summary()
         } else {
             String::new()
         };
-        let font_width = u16::try_from(Line::from(font_text.as_str()).width()).unwrap_or(u16::MAX);
-        let [left_area, font_area] =
-            Layout::horizontal([Constraint::Fill(1), Constraint::Length(font_width)]).areas(area);
         let left = self
             .theme
             .prompt_line()
             .or_else(|| self.status.clone())
             .or_else(|| self.startup.as_ref().map(|s| s.text().to_string()))
             .unwrap_or_default();
-        f.render_widget(Paragraph::new(left), left_area);
-        f.render_widget(Paragraph::new(font_text), font_area);
+        let left_width = Line::from(left.as_str()).width();
+        let font_width = Line::from(font_text.as_str()).width();
+        f.render_widget(Paragraph::new(left.as_str()), area);
+        if let Some(slot) = font_slot(area, left_width, font_width) {
+            f.render_widget(Paragraph::new(font_text), slot);
+        }
     }
 
     /// The module whose panes are drawn: the selected one once the items column is focused.
@@ -378,4 +384,22 @@ fn render_popup(f: &mut Frame, area: Rect, popup: &Popup) {
         Paragraph::new(lines).block(Block::bordered().padding(Padding::horizontal(1))),
         box_area,
     );
+}
+
+/// Where the font summary goes on the status row, or `None` when it is hidden.
+fn font_slot(area: Rect, left_width: usize, font_width: usize) -> Option<Rect> {
+    if font_width == 0 {
+        return None;
+    }
+    let row = usize::from(area.width);
+    if left_width > 0 && left_width.saturating_add(1).saturating_add(font_width) > row {
+        return None;
+    }
+    // At most the row width, so the conversion cannot fail.
+    let width = u16::try_from(font_width.min(row)).expect("bounded by the row width");
+    Some(Rect {
+        x: area.x + (area.width - width),
+        width,
+        ..area
+    })
 }

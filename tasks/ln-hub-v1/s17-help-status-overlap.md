@@ -1,7 +1,7 @@
 ---
 spec: ../../specs/ln-hub-v1.md
 slice_id: S17-help-status-overlap
-status: planned
+status: green
 ---
 
 ### Slice 17
@@ -37,8 +37,9 @@ status: planned
   - A short status still lets the font show: `Enter` on a wallpaper → `Applying wp.png…` and
     `F` both whole at 80 columns. The rule is per frame: once the long text is replaced by a
     short one, `F` is back.
-  - A long status hides `F`: `Apply failed: <reason of 70 chars>` at 80 columns is whole and `F`
-    is absent.
+  - A long status hides `F`: at 80 columns a status of 70 cells in total (`Apply failed: ` plus
+    a 56-char reason) is whole and `F` is absent; a status wider than the row (e.g. 84 cells)
+    is clipped by the row edge only, and `F` is absent.
   - An open prompt takes priority too: `f` and typing a name wider than the room left for it
     shows the prompt text whole and no `F`; a short prompt text keeps `F`.
   - Module column focused (`F` is not shown there): the help line at 80 and 70 columns is as
@@ -54,6 +55,8 @@ status: planned
   - The rule covers every left text, not only the help line, since the root cause is the same
     layout. When the left text is empty, `F` is drawn as today (a width over the row is still
     clipped by the row).
+  - The empty-left case is pinned by tests at widths 29 (exactly `F`), 20 (the leading 20 cells
+    of `F`) and 30 (one blank, then `F`).
   - Implementation shape (the implementer may differ): measure the left text with the same
     `Line::width()` as today, compute `font_width` as 0 when it does not fit, keep the layout
     split. No change to `Font::summary` or the pane.
