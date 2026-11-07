@@ -102,12 +102,21 @@ impl Cursor {
         }
     }
 
-    pub(crate) fn first(&mut self) {
-        self.0 = 0;
+    /// Applies a movement action (Down, Up, Top, Bottom) to a list of `len` rows; returns whether
+    /// `action` was one.
+    pub(crate) fn navigate(&mut self, action: Action, len: usize) -> bool {
+        match action {
+            Action::Down => self.move_by(1, len),
+            Action::Up => self.move_by(-1, len),
+            Action::Top => self.0 = 0,
+            Action::Bottom => self.last(len),
+            _ => return false,
+        }
+        true
     }
 
     /// Moves to the last row of a list of `len` rows; does nothing when it is empty.
-    pub(crate) fn last(&mut self, len: usize) {
+    fn last(&mut self, len: usize) {
         self.0 = len.saturating_sub(1);
     }
 

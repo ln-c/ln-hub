@@ -5,6 +5,7 @@
 //! huge sources first so that step is cheap).
 
 use std::collections::VecDeque;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -71,14 +72,19 @@ impl ImageView {
                 while let Ok(newer) = request_rx.try_recv() {
                     replies.push(Decoded::Skipped(std::mem::replace(&mut path, newer)));
                 }
-                replies.push(match decode(&path) {
-                    Some(img) => Decoded::Image(path, img),
-                    None => Decoded::Failed(path),
-                });
+                // Superseded requests are answered before the (slow) decode of the newest.
                 for reply in replies {
                     if decoded_tx.send(reply).is_err() {
                         return;
                     }
+                }
+                let decoded = panic::catch_unwind(AssertUnwindSafe(|| decode(&path))).ok();
+                let reply = match decoded.flatten() {
+                    Some(img) => Decoded::Image(path, img),
+                    None => Decoded::Failed(path),
+                };
+                if decoded_tx.send(reply).is_err() {
+                    return;
                 }
             }
         });
@@ -128,8 +134,9 @@ impl ImageView {
             if self.cache.len() >= CACHE_CAP {
                 self.cache.pop_front();
             }
-            self.cache.push_back((preview.path.clone(), Entry::Pending));
-            let _ = self.requests.send(preview.path.clone());
+            let sent = self.requests.send(preview.path.clone()).is_ok();
+            let entry = if sent { Entry::Pending } else { Entry::Failed };
+            self.cache.push_back((preview.path.clone(), entry));
         }
     }
 }

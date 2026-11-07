@@ -86,15 +86,13 @@ impl MonitorsPane {
 
     /// Handles a key while the Monitors items are focused.
     pub(crate) fn handle(&mut self, action: Action) -> Option<PaneAction> {
-        match action {
-            Action::Down => self.cursor.move_by(1, self.len()),
-            Action::Up => self.cursor.move_by(-1, self.len()),
-            Action::Top => self.cursor.first(),
-            Action::Bottom => self.cursor.last(self.len()),
-            Action::Apply => return self.toggle(),
-            _ => {}
+        if self.cursor.navigate(action, self.len()) {
+            return None;
         }
-        None
+        match action {
+            Action::Apply => self.toggle(),
+            _ => None,
+        }
     }
 
     /// Nothing to reset when focus leaves the pane.

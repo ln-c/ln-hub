@@ -1,7 +1,6 @@
 //! The Theme items pane: the wallpaper list with its applied-wallpaper mark and cursor, and the
 //! font summary read from the Hyprland env file.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use ratatui::Frame;
@@ -49,8 +48,8 @@ fn human_size(bytes: u64) -> String {
 /// The detail lines for `w`: its name, size when the file can be read, kind, and thumbnail.
 fn preview_lines(w: &Wallpaper) -> Vec<String> {
     let mut lines = vec![w.name.clone()];
-    if let Ok(meta) = fs::metadata(&w.path) {
-        lines.push(human_size(meta.len()));
+    if let Some(size) = w.size {
+        lines.push(human_size(size));
     }
     lines.push(
         match w.kind {
@@ -222,11 +221,11 @@ impl ThemePane {
 
     /// Handles a key while the Theme items are focused and no prompt is open.
     pub(crate) fn handle(&mut self, action: Action) -> Option<PaneAction> {
+        let len = self.visible().len();
+        if self.cursor.navigate(action, len) {
+            return None;
+        }
         match action {
-            Action::Down => self.cursor.move_by(1, self.visible().len()),
-            Action::Up => self.cursor.move_by(-1, self.visible().len()),
-            Action::Top => self.cursor.first(),
-            Action::Bottom => self.cursor.last(self.visible().len()),
             Action::Filter => {
                 self.prompt = Some(Prompt::new(PromptKind::Filter, self.filter.clone()))
             }
