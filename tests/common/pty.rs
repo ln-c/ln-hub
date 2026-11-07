@@ -22,14 +22,20 @@ pub struct Session {
     child: Box<dyn Child + Send + Sync>,
     writer: Box<dyn Write + Send>,
     out: Arc<Mutex<Vec<u8>>>,
-    start: Instant,
     // Keeps the master (and so the pty) alive for the whole session.
     _master: Box<dyn portable_pty::MasterPty + Send>,
 }
 
 impl Session {
     pub fn spawn(name: &str) -> Session {
+        Session::spawn_with_home(name, |_| {})
+    }
+
+    /// Like `spawn`, but `setup` runs on the fresh HOME before the binary starts (to put files in
+    /// it, e.g. a wallpaper).
+    pub fn spawn_with_home(name: &str, setup: impl FnOnce(&Path)) -> Session {
         let home = tempdir(&format!("{name}-home"));
+        setup(&home);
         let empty_path = tempdir(&format!("{name}-path"));
         let pair = native_pty_system()
             .openpty(PtySize {
@@ -45,7 +51,6 @@ impl Session {
         cmd.env("TERM", "xterm-256color");
         cmd.env_remove("XDG_CONFIG_HOME");
         cmd.cwd(Path::new(&home));
-        let start = Instant::now();
         let child = pair.slave.spawn_command(cmd).expect("spawn ln-hub in pty");
         drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().expect("pty reader");
@@ -65,7 +70,6 @@ impl Session {
             child,
             writer,
             out,
-            start,
             _master: pair.master,
         }
     }
@@ -89,10 +93,31 @@ impl Session {
         );
     }
 
-    /// Sleeps until `at` after spawn (no-op if already past).
-    pub fn sleep_until(&self, at: Duration) {
-        if let Some(rest) = at.checked_sub(self.start.elapsed()) {
-            thread::sleep(rest);
+    /// Polls the output until it contains `needle` or `within` has passed; true if it does.
+    pub fn wait_for(&self, needle: &[u8], within: Duration) -> bool {
+        let deadline = Instant::now() + within;
+        loop {
+            if contains(&self.output(), needle) {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    /// Blocks until `Ready` (S16: drawn once the startup query thread has exited, before the
+    /// event loop reads keys) is in the output, so a key sent afterwards cannot land in the query
+    /// window. Panics, killing the child, if it never shows.
+    pub fn wait_ready(&mut self) {
+        if !self.wait_for(b"Ready", FRAME_TIMEOUT) {
+            let out = self.output();
+            let _ = self.wait_exit(Duration::ZERO);
+            panic!(
+                "no `Ready` within {FRAME_TIMEOUT:?}; output tail: {:?}",
+                tail(&out)
+            );
         }
     }
 
@@ -119,6 +144,14 @@ impl Session {
             thread::sleep(Duration::from_millis(10));
         }
     }
+}
+
+/// Whether `needle` occurs in `hay` (an empty needle occurs everywhere).
+pub fn contains(hay: &[u8], needle: &[u8]) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    hay.windows(needle.len()).any(|w| w == needle)
 }
 
 /// The last 160 bytes of the output, lossy, for failure messages (the full frame is noise).

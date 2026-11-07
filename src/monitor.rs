@@ -7,6 +7,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use serde::Deserialize;
 
 use crate::pane::{Action, Cursor, PaneAction, Program};
+use crate::popup::{Popup, PopupKind};
 use crate::system::System;
 
 /// Shown in the items column when `hyprctl` fails or prints something unreadable.
@@ -58,12 +59,6 @@ impl Power {
     }
 }
 
-/// An open confirmation popup: the text lines and what `Enter` does (`None`: nothing).
-pub(crate) struct Popup {
-    pub(crate) lines: Vec<String>,
-    pub(crate) confirm: Option<PaneAction>,
-}
-
 pub(crate) struct MonitorsPane {
     /// `None` when the last query failed.
     monitors: Option<Vec<Monitor>>,
@@ -99,9 +94,9 @@ impl MonitorsPane {
     /// Nothing to reset when focus leaves the pane.
     pub(crate) fn unfocus(&mut self) {}
 
-    /// The confirmation popup for the monitor under the cursor, decided now: the switch to
-    /// perform, the refusal for the last enabled monitor, or the notice that a job is running.
-    pub(crate) fn popup(&self, busy: bool) -> Option<Popup> {
+    /// The popup for the monitor under the cursor, decided now: the switch to perform or the
+    /// refusal for the last enabled monitor. `None` without a usable list or a row.
+    pub(crate) fn popup(&self) -> Option<Popup> {
         let monitors = self.monitors.as_ref()?;
         let m = monitors.get(self.cursor.get())?;
         let (power, last_enabled) = match m.disabled {
@@ -111,28 +106,16 @@ impl MonitorsPane {
                 monitors.iter().filter(|m| !m.disabled).count() <= 1,
             ),
         };
-        let switch = format!("{} {}", m.name, power.as_str());
-        let (message, confirm) = if busy {
-            ("Applying…".to_owned(), None)
-        } else if last_enabled {
-            (
-                "Refusing to disable the last enabled monitor".to_owned(),
-                None,
-            )
+        let kind = if last_enabled {
+            PopupKind::Refuse
         } else {
-            (
-                switch.clone(),
-                Some(PaneAction::Spawn {
-                    program: Program::Monitorctl,
-                    args: vec![m.name.clone(), power.as_str().to_owned()],
-                    name: switch,
-                }),
-            )
+            PopupKind::Confirm(PaneAction::Spawn {
+                program: Program::Monitorctl,
+                args: vec![m.name.clone(), power.as_str().to_owned()],
+                name: format!("{} {}", m.name, power.as_str()),
+            })
         };
-        Some(Popup {
-            lines: vec![m.row(), message],
-            confirm,
-        })
+        Some(Popup { row: m.row(), kind })
     }
 
     /// Draws the pane's two columns; the preview is empty.

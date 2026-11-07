@@ -161,9 +161,9 @@ fn enter_on_a_disabled_monitor_spawns_monitorctl_on() {
 }
 
 #[test]
-fn disabling_the_last_enabled_monitor_is_refused_with_a_status() {
+fn disabling_the_last_enabled_monitor_is_refused_with_a_popup() {
     // Catches: disabling the only enabled monitor (leaving no output), or refusing silently
-    // without the `Refusing to disable the last enabled monitor` status.
+    // without the `Refusing to disable the last enabled monitor` popup.
     let sys = sys_with(&[edp(false), dp(true)]);
     let mut a = monitors_app("s10-last", &sys);
     enter(&mut a);

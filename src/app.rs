@@ -8,9 +8,10 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Padding, Paragraph};
 
 use crate::config::{Config, Module};
-use crate::monitor::{MonitorsPane, Popup};
+use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
 use crate::pane::{Action, PaneAction, Program, TOP_PREFIX};
+use crate::popup::{Popup, PopupNext};
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::{PreviewImage, ThemePane};
 
@@ -105,11 +106,10 @@ impl App {
             self.startup = None;
         }
         if let Some(popup) = self.popup.take() {
-            match key.code {
-                KeyCode::Enter if popup.confirm.is_some() => self.run(popup.confirm),
-                KeyCode::Esc => {}
-                KeyCode::Char(c) if c == self.quit_key => {}
-                _ => self.popup = Some(popup),
+            match popup.on_key(key.code, self.quit_key) {
+                PopupNext::Keep(popup) => self.popup = Some(popup),
+                PopupNext::Close => {}
+                PopupNext::Confirm(action) => self.run(Some(action)),
             }
             return;
         }
@@ -177,7 +177,13 @@ impl App {
                 None
             }
             (Some(Module::Monitors), Action::Apply) => {
-                self.popup = self.monitors.popup(self.job.is_some());
+                self.popup = self.monitors.popup().map(|popup| {
+                    if self.job.is_some() {
+                        popup.busy()
+                    } else {
+                        popup
+                    }
+                });
                 None
             }
             (Some(_), Action::Apply) if self.job.is_some() => None,
@@ -274,7 +280,6 @@ impl App {
 
         self.render_status(f, status_area, theme_active);
         if let Some(popup) = &self.popup {
-            self.preview_image = None;
             render_popup(f, main_area, popup);
         }
     }
@@ -359,13 +364,10 @@ impl App {
 
 /// Draws the popup centred over `area`, over a cleared box just wide enough for its text.
 fn render_popup(f: &mut Frame, area: Rect, popup: &Popup) {
-    let text_width = popup
-        .lines
-        .iter()
-        .map(|l| Line::from(l.as_str()).width())
-        .max();
+    let lines = popup.lines();
+    let text_width = lines.iter().map(|l| Line::from(l.as_str()).width()).max();
     let width = u16::try_from(text_width.unwrap_or(0) + 4).unwrap_or(u16::MAX);
-    let height = u16::try_from(popup.lines.len() + 2).unwrap_or(u16::MAX);
+    let height = u16::try_from(lines.len() + 2).unwrap_or(u16::MAX);
     let [_, row, _] = Layout::vertical([
         Constraint::Fill(1),
         Constraint::Length(height.min(area.height)),
@@ -378,7 +380,7 @@ fn render_popup(f: &mut Frame, area: Rect, popup: &Popup) {
         Constraint::Fill(1),
     ])
     .areas(row);
-    let lines: Vec<Line> = popup.lines.iter().map(|l| Line::from(l.as_str())).collect();
+    let lines: Vec<Line> = lines.iter().map(|l| Line::from(l.as_str())).collect();
     f.render_widget(Clear, box_area);
     f.render_widget(
         Paragraph::new(lines).block(Block::bordered().padding(Padding::horizontal(1))),

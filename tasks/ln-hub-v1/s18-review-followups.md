@@ -1,7 +1,7 @@
 ---
 spec: ../../specs/ln-hub-v1.md
 slice_id: S18-review-followups
-status: planned
+status: green
 ---
 
 ### Slice 18
@@ -108,3 +108,13 @@ status: planned
     implementer's call as long as `lib.rs` exports stay the same.
   - Not in scope: replaying keys that arrive in the query window, a screen emulator for the pty
     tests, a Theme popup, and a `portable-pty` upgrade.
+- Follow-ups (deferred, non-blocking review items):
+  - Popup fields `row` / `kind` stay `pub(crate)` because `MonitorsPane::popup` builds
+    `Popup { row, kind }`; a `Popup::new` would allow private fields.
+  - `PopupKind::Confirm(PaneAction)` admits an unreachable `Status` arm (`popup.rs`); a narrower
+    payload would remove it.
+  - The doc comment on `struct Popup` still says "An open confirmation popup"; it also covers
+    refusal and busy.
+  - The pty test helpers (`wait_for` / `find`, kill-then-panic) are duplicated across
+    `tests/s16_pty.rs`, `tests/s18_pty_sixel.rs` and `tests/common/pty.rs`.
+  - `tests/s16_init_status.rs` and `tests/s17_help_status_overlap.rs` are not rustfmt-clean.
