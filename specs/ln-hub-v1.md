@@ -416,7 +416,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - The highlight is `background` text on a `color4` bar, in the module column and the items.
     The fg follows a reload too.
   - The fallback is the pre-S11 look: `REVERSED` with fg and bg `Reset`. It is used when the
-    file is missing, has an invalid value, misses a key, or is empty at start.
+    file is missing, has an invalid value, or misses a key at start (an empty file is pinned
+    only as a rewrite after a good load).
   - `tick` reloads with no job in flight; `render` never reads the file. The file is reread
     only when its mtime differs from the last one seen, including an mtime already seen
     after a reload.
@@ -433,6 +434,12 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - Only the list highlight follows the palette; borders, titles and status keep terminal
     colors. Pass one `Styles` value to the panes instead of a bare `Style` when a second
     palette color is used (S12 or later).
+- Follow-ups (non-blocking, from review):
+  - `Palette::highlight` reads `background`/`color4` via hard-coded indices into `NAMES`
+    (guarded by the s11 tests); prefer named lookups or a const assert, and fold the second
+    `impl Palette` block into the first.
+  - The keep-last-good tests pin only bg, and no test checks the palette highlight in the
+    Monitors items; add those asserts when the palette code is touched again.
 
 ### Slice 12
 - slice_id: S12-filter
