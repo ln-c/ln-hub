@@ -112,13 +112,15 @@ impl Session {
     /// window. Panics, killing the child, if it never shows.
     pub fn wait_ready(&mut self) {
         if !self.wait_for(b"Ready", FRAME_TIMEOUT) {
-            let out = self.output();
-            let _ = self.wait_exit(Duration::ZERO);
-            panic!(
-                "no `Ready` within {FRAME_TIMEOUT:?}; output tail: {:?}",
-                tail(&out)
-            );
+            self.fail(&format!("no `Ready` within {FRAME_TIMEOUT:?}"));
         }
+    }
+
+    /// Kills the child, then panics with `msg` and the output tail (no process is left behind).
+    pub fn fail(&mut self, msg: &str) -> ! {
+        let out = self.output();
+        let _ = self.wait_exit(Duration::ZERO);
+        panic!("{msg}; output tail: {:?}", tail(&out));
     }
 
     pub fn send(&mut self, bytes: &[u8]) {
@@ -146,12 +148,17 @@ impl Session {
     }
 }
 
+/// Byte offset of the first `needle` in `hay`, if present (an empty needle is at 0).
+pub fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    hay.windows(needle.len()).position(|w| w == needle)
+}
+
 /// Whether `needle` occurs in `hay` (an empty needle occurs everywhere).
 pub fn contains(hay: &[u8], needle: &[u8]) -> bool {
-    if needle.is_empty() {
-        return true;
-    }
-    hay.windows(needle.len()).any(|w| w == needle)
+    find(hay, needle).is_some()
 }
 
 /// The last 160 bytes of the output, lossy, for failure messages (the full frame is noise).

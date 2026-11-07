@@ -8,31 +8,12 @@
 
 mod common;
 
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use common::pty::{Session, assert_no_sixel, tail};
+use common::pty::{Session, assert_no_sixel, find, tail};
 
 const INITIALIZING: &str = "Initializing…";
 const READY: &str = "Ready";
-
-/// Byte offset of `needle` in `out`, if present.
-fn find(out: &[u8], needle: &str) -> Option<usize> {
-    let n = needle.as_bytes();
-    out.windows(n.len()).position(|w| w == n)
-}
-
-/// Polls the output until it contains `needle` or `within` has passed.
-fn wait_for(s: &Session, needle: &str, within: Duration) -> bool {
-    let deadline = Instant::now() + within;
-    while Instant::now() < deadline {
-        if find(&s.output(), needle).is_some() {
-            return true;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    find(&s.output(), needle).is_some()
-}
 
 #[test]
 fn the_first_frame_carries_initializing() {
@@ -41,7 +22,7 @@ fn the_first_frame_carries_initializing() {
     let mut s = Session::spawn("s16-pty-init");
     s.wait_first_frame();
     // Same flush as the `Theme` title; the grace only covers the drain thread's chunking.
-    let seen = wait_for(&s, INITIALIZING, Duration::from_millis(100));
+    let seen = s.wait_for(INITIALIZING.as_bytes(), Duration::from_millis(100));
     let out = s.output();
     let _ = s.wait_exit(Duration::ZERO); // kill the child, whatever the outcome
     assert!(
@@ -58,7 +39,7 @@ fn ready_follows_within_1s_of_the_first_frame_after_initializing() {
     // the first frame, or Ready drawn before Initializing….
     let mut s = Session::spawn("s16-pty-ready");
     s.wait_first_frame();
-    let ready = wait_for(&s, READY, Duration::from_secs(1));
+    let ready = s.wait_for(READY.as_bytes(), Duration::from_secs(1));
     let out = s.output();
     let _ = s.wait_exit(Duration::ZERO);
     assert!(
@@ -66,8 +47,8 @@ fn ready_follows_within_1s_of_the_first_frame_after_initializing() {
         "`{READY}` not in the output within 1 s of the first frame; output tail: {:?}",
         tail(&out)
     );
-    let init_at = find(&out, INITIALIZING);
-    let ready_at = find(&out, READY);
+    let init_at = find(&out, INITIALIZING.as_bytes());
+    let ready_at = find(&out, READY.as_bytes());
     assert!(
         init_at.is_some() && init_at < ready_at,
         "`{INITIALIZING}` must come before `{READY}` in the byte stream (got {init_at:?} vs {ready_at:?}); output tail: {:?}",
@@ -82,7 +63,7 @@ fn q_sent_once_ready_is_in_the_output_exits_0_within_1s() {
     // is on screen must still quit.
     let mut s = Session::spawn("s16-pty-q");
     s.wait_first_frame();
-    let ready = wait_for(&s, READY, Duration::from_secs(2));
+    let ready = s.wait_for(READY.as_bytes(), Duration::from_secs(2));
     if !ready {
         let _ = s.wait_exit(Duration::ZERO);
         panic!(

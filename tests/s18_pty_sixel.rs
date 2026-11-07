@@ -39,23 +39,13 @@ fn write_wallpaper(home: &Path) {
         .expect("write a.png");
 }
 
-/// Kills the child, then panics with `msg` and the output tail (no process is left behind).
-fn fail(s: &mut Session, msg: &str) -> ! {
-    let out = s.output();
-    let _ = s.wait_exit(Duration::ZERO);
-    panic!("{msg}; output tail: {:?}", tail(&out));
-}
-
 /// Fails unless the cumulative output has no help line: a reply byte (`?`) that reached the event
 /// loop as a key would have opened it.
 fn assert_no_leaked_key(s: &mut Session, when: &str) {
     if contains(&s.output(), HELP_LINE) {
-        fail(
-            s,
-            &format!(
-                "the help line is in the output {when}: a reply byte reached the event loop as a key"
-            ),
-        );
+        s.fail(&format!(
+            "the help line is in the output {when}: a reply byte reached the event loop as a key"
+        ));
     }
 }
 
@@ -68,15 +58,12 @@ fn answered_query_exits_early_leaks_no_keys_and_l_draws_a_sixel() {
     let mut s = Session::spawn_with_home("s18-pty-sixel", write_wallpaper);
 
     if !s.wait_for(DA1_REQUEST, Duration::from_secs(5)) {
-        fail(&mut s, "the binary never emitted the DA1 request `ESC [ c`");
+        s.fail("the binary never emitted the DA1 request `ESC [ c`");
     }
     // The timer starts when the request is seen; the reply goes out right away.
     s.send(REPLY);
     if !s.wait_for(b"Ready", Duration::from_millis(200)) {
-        fail(
-            &mut s,
-            "`Ready` not in the output within 200 ms of the DA1 reply (no early exit?)",
-        );
+        s.fail("`Ready` not in the output within 200 ms of the DA1 reply (no early exit?)");
     }
 
     // The loop draws `Ready` and only then reads (and would handle) a leaked key and redraw, so
@@ -84,18 +71,14 @@ fn answered_query_exits_early_leaks_no_keys_and_l_draws_a_sixel() {
     thread::sleep(Duration::from_millis(150));
     assert_no_leaked_key(&mut s, "after Ready");
     if contains(&s.output(), SIXEL_START) {
-        fail(
-            &mut s,
+        s.fail(
             "a sixel `ESC P` is in the output before `l` (nothing is hovered yet), so the positive check below would prove nothing",
         );
     }
 
     s.send(b"l");
     if !s.wait_for(SIXEL_START, Duration::from_secs(2)) {
-        fail(
-            &mut s,
-            "no sixel start `ESC P` within 2 s of `l` (a.png hovered)",
-        );
+        s.fail("no sixel start `ESC P` within 2 s of `l` (a.png hovered)");
     }
     assert_no_leaked_key(&mut s, "after l");
 
