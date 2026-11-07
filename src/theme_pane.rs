@@ -218,6 +218,8 @@ impl ThemePane {
         match action {
             Action::Down => self.cursor.move_by(1, self.visible().len()),
             Action::Up => self.cursor.move_by(-1, self.visible().len()),
+            Action::Top => self.cursor.first(),
+            Action::Bottom => self.cursor.last(self.visible().len()),
             Action::Filter => {
                 self.prompt = Some(Prompt::new(PromptKind::Filter, self.filter.clone()))
             }

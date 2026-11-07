@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use ratatui::Frame;
-use ratatui::crossterm::event::KeyEvent;
+use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use crate::config::{Config, Module};
 use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
-use crate::pane::{Action, PaneAction, Program};
+use crate::pane::{Action, PaneAction, Program, TOP_PREFIX};
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
 
@@ -46,6 +46,8 @@ pub struct App {
     selected: usize,
     job: Option<Job>,
     status: Option<String>,
+    /// A `g` was pressed; the next key completes or cancels `gg`.
+    top_pending: bool,
     quit: bool,
 }
 
@@ -66,6 +68,7 @@ impl App {
             selected: 0,
             job: None,
             status: None,
+            top_pending: false,
             quit: false,
         }
     }
@@ -77,12 +80,41 @@ impl App {
             self.run(pane_action);
             return;
         }
+        if std::mem::take(&mut self.top_pending) {
+            if key.code == KeyCode::Char(TOP_PREFIX) {
+                self.handle_action(Action::Top);
+            }
+            return;
+        }
+        if key.code == KeyCode::Char(TOP_PREFIX) {
+            self.top_pending = true;
+            return;
+        }
         let Some(action) = Action::from_key(key.code, self.quit_key) else {
             return;
         };
+        self.handle_action(action);
+    }
+
+    fn handle_action(&mut self, action: Action) {
         let pane_action = match (self.focused_module(), action) {
             (_, Action::Quit) => {
                 self.quit = true;
+                None
+            }
+            (_, Action::Help) => {
+                self.status = Some(format!(
+                    "h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  {} quit",
+                    self.quit_key
+                ));
+                None
+            }
+            (None, Action::Top) => {
+                self.selected = 0;
+                None
+            }
+            (None, Action::Bottom) => {
+                self.selected = self.modules.len().saturating_sub(1);
                 None
             }
             (_, Action::Right) => {
