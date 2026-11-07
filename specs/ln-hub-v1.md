@@ -616,7 +616,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - `ProcSystem` never prunes finished `Child` handles; `jobs.log` has no per-job header and
     grows without bound.
   - `parse_args` could be a `while let` loop with specific messages and `--help`.
-- Manual check in the QEMU VM (foot), in addition to the acceptance list:
+- Manual check in the QEMU VM (foot), in addition to the acceptance list. Both lists are carried
+  over to the VM test in the dotfiles repo:
   - the sixel image disappears when moving off an image and redraws correctly on resize;
   - j/k through many large images stays responsive;
   - the help line at 80 columns (it truncates);
