@@ -150,4 +150,4 @@ Each slice lives in its own file under `tasks/ln-hub-v1/` (front matter links ba
 | S12-filter | `/` filters the items column as you type | [s12-filter.md](../tasks/ln-hub-v1/s12-filter.md) | green |
 | S13-bin | The binary: `--version`, real `ProcSystem`, terminal loop, sixel preview | [s13-bin.md](../tasks/ln-hub-v1/s13-bin.md) | green |
 | S14-picker-query | Terminal capability query with a hard deadline; no freeze, no eaten keys | [s14-picker-query.md](../tasks/ln-hub-v1/s14-picker-query.md) | green |
-| S15-monitor-popup | `Enter` on a monitor opens a confirm popup overlay | [s15-monitor-popup.md](../tasks/ln-hub-v1/s15-monitor-popup.md) | pending |
+| S15-monitor-popup | `Enter` on a monitor opens a confirm popup overlay | [s15-monitor-popup.md](../tasks/ln-hub-v1/s15-monitor-popup.md) | green |

@@ -58,6 +58,12 @@ impl Power {
     }
 }
 
+/// An open confirmation popup: the text lines and what `Enter` does (`None`: nothing).
+pub(crate) struct Popup {
+    pub(crate) lines: Vec<String>,
+    pub(crate) confirm: Option<PaneAction>,
+}
+
 pub(crate) struct MonitorsPane {
     /// `None` when the last query failed.
     monitors: Option<Vec<Monitor>>,
@@ -86,36 +92,46 @@ impl MonitorsPane {
 
     /// Handles a key while the Monitors items are focused.
     pub(crate) fn handle(&mut self, action: Action) -> Option<PaneAction> {
-        if self.cursor.navigate(action, self.len()) {
-            return None;
-        }
-        match action {
-            Action::Apply => self.toggle(),
-            _ => None,
-        }
+        self.cursor.navigate(action, self.len());
+        None
     }
 
     /// Nothing to reset when focus leaves the pane.
     pub(crate) fn unfocus(&mut self) {}
 
-    /// Toggles the monitor under the cursor through `ln-monitorctl`, unless it is the last
-    /// enabled one.
-    fn toggle(&self) -> Option<PaneAction> {
+    /// The confirmation popup for the monitor under the cursor, decided now: the switch to
+    /// perform, the refusal for the last enabled monitor, or the notice that a job is running.
+    pub(crate) fn popup(&self, busy: bool) -> Option<Popup> {
         let monitors = self.monitors.as_ref()?;
         let m = monitors.get(self.cursor.get())?;
-        let power = match m.disabled {
-            true => Power::On,
-            false if monitors.iter().filter(|m| !m.disabled).count() <= 1 => {
-                return Some(PaneAction::Status(
-                    "Refusing to disable the last enabled monitor".to_owned(),
-                ));
-            }
-            false => Power::Off,
+        let (power, last_enabled) = match m.disabled {
+            true => (Power::On, false),
+            false => (
+                Power::Off,
+                monitors.iter().filter(|m| !m.disabled).count() <= 1,
+            ),
         };
-        Some(PaneAction::Spawn {
-            program: Program::Monitorctl,
-            args: vec![m.name.clone(), power.as_str().to_owned()],
-            name: format!("{} {}", m.name, power.as_str()),
+        let switch = format!("{} {}", m.name, power.as_str());
+        let (message, confirm) = if busy {
+            ("Applying…".to_owned(), None)
+        } else if last_enabled {
+            (
+                "Refusing to disable the last enabled monitor".to_owned(),
+                None,
+            )
+        } else {
+            (
+                switch.clone(),
+                Some(PaneAction::Spawn {
+                    program: Program::Monitorctl,
+                    args: vec![m.name.clone(), power.as_str().to_owned()],
+                    name: switch,
+                }),
+            )
+        };
+        Some(Popup {
+            lines: vec![m.row(), message],
+            confirm,
         })
     }
 

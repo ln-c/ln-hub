@@ -1,6 +1,10 @@
 //! S10-monitor-toggle: `Enter` on a Monitors row toggles that monitor through `ln-monitorctl`,
 //! refuses to disable the last enabled monitor, and refreshes the list after the job.
 //!
+//! Since S15 the toggle goes through a popup: the first `Enter` opens it, a second `Enter` confirms
+//! (helper `confirm`). The popup's own behavior is pinned in `s15_monitor_popup.rs`; these tests keep
+//! their S10 intent (spawn args, refusal, re-query, statuses, error wording) behind `Enter`, `Enter`.
+//!
 //! Rendered on a 120x24 buffer (as in S9): the items column is x 21..53. Status assertions search
 //! every rendered row, because the spec does not fix the status bar location.
 //!
@@ -17,6 +21,7 @@ use std::io::ErrorKind;
 use common::*;
 use ln_hub::{App, Config, JobState, Module};
 use ratatui::buffer::Buffer;
+use ratatui::crossterm::event::KeyCode;
 
 const W: u16 = 120;
 const H: u16 = 24;
@@ -71,6 +76,38 @@ fn assert_status(app: &mut App, text: &str) {
     common::assert_status(&draw(app), text);
 }
 
+fn key_esc(app: &mut App) {
+    app.handle_key(key(KeyCode::Esc));
+}
+
+/// Opens the monitor popup and confirms it (S15): the pair of `Enter`s that used to be one. The
+/// first `Enter` must only open the popup, so it must not spawn anything.
+fn confirm(app: &mut App, sys: &FakeSystem) {
+    let before = sys.spawn_calls().len();
+    enter(app);
+    assert_eq!(
+        sys.spawn_calls().len(),
+        before,
+        "the first Enter must only open the popup, not spawn"
+    );
+    enter(app);
+}
+
+/// Asserts the refusal popup is up: at 80 columns the items column truncates `EDP_ON`, so the full
+/// row can only come from the popup; the refusal text is part of the popup too (S15).
+fn assert_refusal_popup(app: &mut App) {
+    let buf = draw_sized(app, 80, H);
+    let lines = buffer_lines(&buf);
+    assert!(
+        lines.iter().any(|l| l.contains(EDP_ON))
+            && lines
+                .iter()
+                .any(|l| l.contains("Refusing to disable the last enabled monitor")),
+        "refusal popup (full row + refusal text) not shown; buffer:\n{}",
+        dump(&buf)
+    );
+}
+
 fn spawn(prog: &str, args: &[&str]) -> (String, Vec<String>) {
     (
         prog.to_string(),
@@ -102,7 +139,7 @@ fn enter_on_an_enabled_monitor_spawns_monitorctl_off() {
     let sys = sys_with(&[edp(false), dp(false)]);
     let mut a = monitors_app("s10-off", &sys);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(
         sys.spawn_calls(),
         vec![spawn("ln-monitorctl", &["DP-1", "off"])]
@@ -116,7 +153,7 @@ fn enter_on_a_disabled_monitor_spawns_monitorctl_on() {
     let sys = sys_with(&[edp(false), dp(true)]);
     let mut a = monitors_app("s10-on", &sys);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(
         sys.spawn_calls(),
         vec![spawn("ln-monitorctl", &["DP-1", "on"])]
@@ -130,12 +167,13 @@ fn disabling_the_last_enabled_monitor_is_refused_with_a_status() {
     let sys = sys_with(&[edp(false), dp(true)]);
     let mut a = monitors_app("s10-last", &sys);
     enter(&mut a);
+    assert_refusal_popup(&mut a);
+    enter(&mut a);
     assert!(
         sys.spawn_calls().is_empty(),
         "must not spawn: {:?}",
         sys.spawn_calls()
     );
-    assert_status(&mut a, "Refusing to disable the last enabled monitor");
 }
 
 #[test]
@@ -147,7 +185,7 @@ fn done_job_requeries_hyprctl_and_shows_the_refreshed_rows() {
     assert!(items_hit(&draw(&mut a), DP_ON).is_some());
     press(&mut a, 'j');
     sys.set_job_state(JobState::Running);
-    enter(&mut a);
+    confirm(&mut a, &sys);
     let before = hyprctl_runs(&sys);
 
     a.tick();
@@ -219,7 +257,7 @@ fn j_inside_monitors_items_does_not_move_the_module_column() {
         dump(&buf)
     );
     assert_only_highlighted(&mut a, HDMI_ON);
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(
         sys.spawn_calls(),
         vec![spawn("ln-monitorctl", &["HDMI-A-1", "off"])]
@@ -234,7 +272,7 @@ fn cursor_clamps_after_a_refresh_that_shrinks_the_list() {
     let mut a = monitors_app("s10-shrink", &sys);
     press(&mut a, 'j');
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(
         sys.spawn_calls(),
         vec![spawn("ln-monitorctl", &["HDMI-A-1", "off"])]
@@ -249,7 +287,7 @@ fn cursor_clamps_after_a_refresh_that_shrinks_the_list() {
         dump(&buf)
     );
     assert_only_highlighted_among(&mut a, &[EDP_ON, DP_ON], DP_ON);
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(
         sys.spawn_calls(),
         vec![
@@ -266,11 +304,12 @@ fn a_refusal_leaves_no_job_in_flight() {
     let sys = sys_with(&[edp(false), dp(true)]);
     let mut a = monitors_app("s10-refusal-free", &sys);
     enter(&mut a);
-    assert_status(&mut a, "Refusing to disable the last enabled monitor");
+    assert_refusal_popup(&mut a);
     assert!(sys.spawn_calls().is_empty());
 
+    key_esc(&mut a);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(
         sys.spawn_calls(),
         vec![spawn("ln-monitorctl", &["DP-1", "on"])]
@@ -283,7 +322,7 @@ fn enter_on_a_disabled_first_monitor_spawns_on_without_moving() {
     // initial cursor (first monitor) when that monitor is disabled.
     let sys = sys_with(&[edp(true), dp(false)]);
     let mut a = monitors_app("s10-first-disabled", &sys);
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(
         sys.spawn_calls(),
         vec![spawn("ln-monitorctl", &["eDP-1", "on"])]
@@ -298,7 +337,7 @@ fn spawning_shows_applying_and_done_shows_applied() {
     sys.set_job_state(JobState::Running);
     let mut a = monitors_app("s10-status", &sys);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_status(&mut a, "Applying DP-1 off…");
 
     sys.set_job_state(JobState::Done);
@@ -314,7 +353,7 @@ fn failed_job_shows_apply_failed_and_does_not_requery_hyprctl() {
     sys.set_job_state(JobState::Running);
     let mut a = monitors_app("s10-failed", &sys);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(sys.spawn_calls().len(), 1, "the toggle must be spawned");
     let before = hyprctl_runs(&sys);
 
@@ -332,14 +371,16 @@ fn second_enter_while_running_does_not_spawn_again_but_works_after_done() {
     sys.set_job_state(JobState::Running);
     let mut a = monitors_app("s10-twice", &sys);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     a.tick();
     enter(&mut a);
+    enter(&mut a);
+    key_esc(&mut a);
     assert_eq!(sys.spawn_calls().len(), 1, "calls: {:?}", sys.spawn_calls());
 
     sys.set_job_state(JobState::Done);
     a.tick();
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_eq!(sys.spawn_calls().len(), 2, "calls: {:?}", sys.spawn_calls());
 }
 
@@ -351,14 +392,14 @@ fn monitorctl_spawn_error_wording_depends_on_the_error_kind() {
     sys.set_spawn_error(ErrorKind::NotFound, "not found");
     let mut a = monitors_app("s10-spawn-nf", &sys);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_status(&mut a, "ln-monitorctl not found: not found");
 
     let sys = sys_with(&[edp(false), dp(false)]);
     sys.set_spawn_error(ErrorKind::PermissionDenied, "denied");
     let mut a = monitors_app("s10-spawn-pd", &sys);
     press(&mut a, 'j');
-    enter(&mut a);
+    confirm(&mut a, &sys);
     assert_status(&mut a, "Failed to start ln-monitorctl: denied");
     assert!(
         !shows(&mut a, "not found"),

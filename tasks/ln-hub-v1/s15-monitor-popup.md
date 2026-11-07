@@ -1,7 +1,7 @@
 ---
 spec: ../../specs/ln-hub-v1.md
 slice_id: S15-monitor-popup
-status: pending
+status: green
 ---
 
 ### Slice 15
