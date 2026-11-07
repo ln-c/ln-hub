@@ -314,6 +314,31 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
 - acceptance_criteria:
   - Hovering `img2.png` (2048 bytes) → the preview shows `img2.png` and `2.0K`.
   - Hovering `b.mp4` with `b.jpg` beside it → the preview shows `video` and `thumb: b.jpg`.
+  - (Review follow-up) Sizes are `ls -h` style and round up: 10 → `10`, 1500 → `1.5K`,
+    1025 → `1.1K`, 10240 → `10K`, 1048576 → `1.0M`. An image shows `image` and no
+    `thumb:`. The preview is empty until items are focused, and also when the list is empty.
+- Review notes carried to later slices:
+  - S13 (bin loop): `src/main.rs` never calls `App::tick` and redraws only on a key event, so
+    in the real binary an apply stays on `Applying…` and `●` never moves. The loop must use
+    `event::poll(timeout)` and then `tick()` + redraw. When adding it, stop `render_preview`
+    calling `fs::metadata` on every frame: capture `size` once in `discover` (on `Wallpaper`)
+    or cache it in `ThemePane`.
+  - S8/S9 (second pane): replace the `items_focused && theme_focused()` branch in
+    `App::render`, and the `Block`s that `App` passes into `ThemePane::render` and
+    `render_preview`, with one pane call per module that owns its titles and placeholders,
+    e.g. `ThemePane::render(f, items_area, preview_area)`. This supersedes the S6 note
+    "extract `render_modules` / `render_status`". Do those extractions only when a slice next
+    touches those regions.
+  - When a second consumer appears: move `human_size` and `preview_lines` out of
+    `theme_pane.rs` into a small `preview.rs`. A `Kind::label()` is a candidate at the same
+    time.
+  - Unpinned: when `fs::metadata` fails (e.g. a broken symlink), the size line is silently
+    omitted.
+  - Unpinned: the unit rollover in `human_size` (e.g. 1048575 bytes → `1.0M`, not `1024K`).
+    Pin it if the sizing code is touched again.
+  - Optional nits: `preview_lines` could return the joined text (or `Vec<Line>`) instead of a
+    `Vec<String>` that `render_preview` joins; the `tests/s7_preview.rs` interior-rows comment
+    near `empty_list_preview_is_blank` slightly misdescribes the slice it takes.
 
 ### Slice 8
 - slice_id: S8-font
