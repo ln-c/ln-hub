@@ -131,3 +131,21 @@ fn missing_current_file_has_no_marker_and_highlights_first_item() {
     );
     assert_only_highlighted(&buf, "img1.png");
 }
+
+#[test]
+fn current_path_outside_list_has_no_marker_and_highlights_first_item() {
+    // Catches: matching the current wallpaper by file name instead of full path (a current path
+    // `/elsewhere/img2.png` outside wallpaper_dir would wrongly mark and preselect listed img2.png).
+    let (mut cfg, _dir) = setup("s5-elsewhere");
+    let cur = tempdir("s5-elsewhere-cache").join("current_wallpaper");
+    fs::write(&cur, "/elsewhere/img2.png\n").unwrap();
+    cfg.current_wallpaper_file = cur;
+    let buf = focus_and_draw(cfg);
+
+    assert!(
+        items_hits(&buf, "●").is_empty(),
+        "no `●` expected when the current path is not in the list; buffer:\n{}",
+        dump(&buf)
+    );
+    assert_only_highlighted(&buf, "img1.png");
+}
