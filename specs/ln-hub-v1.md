@@ -393,6 +393,26 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - Canned JSON with `eDP-1` (2880x1800@120, `disabled:false`) and `DP-1` (2560x1440@60,
     `disabled:true`) → rows `eDP-1  2880x1800@120  on` and `DP-1  2560x1440@60  off`.
   - `run` returns an error → the items column shows `hyprctl unavailable`. No panic.
+- review follow-up (pinned in tests/s9_monitors.rs):
+  - Unparseable `hyprctl` output also shows `hyprctl unavailable`. This covers a non-zero
+    exit, because `ProcSystem::run` returns `Ok` with empty stdout.
+  - `hyprctl` runs only when `l` focuses Monitors, never at start-up or on Theme. Pressing `l`
+    again re-queries.
+  - `f`, `s` and Enter do nothing on Monitors.
+  - Carried from S8: an open prompt survives `tick` finishing a job. The `Applied …` status
+    shows after Esc. The font line is absent on Monitors.
+- notes carried to later slices:
+  - S10: `theme_focused()` / `theme_active` / `in_items` duplicate `focused_module()`. Use
+    `focused_module() == Some(Module::Theme)` as the single focus check.
+  - S10: `MonitorsPane` uses `Some(vec![])` for both "not loaded" and "no monitors". Switch to
+    a `Loaded | Unavailable` enum if a `No monitors` message is needed. One entry missing a
+    field makes the whole list unavailable. An empty `[]` shows a blank list (unpinned).
+  - Sticky focus: `j` in the Monitors items falls through to the module column. With
+    Monitors listed before Theme, this would show Theme items without `focus_items`.
+    Unpinned; revisit with `h` / focus handling.
+  - Rows are wider than the 80-column items interior (18 cells) and get truncated. The tests
+    draw at 120x24.
+  - Third pane: consider a `Pane` trait. With two panes, a `match` is enough.
 
 ### Slice 10
 - slice_id: S10-monitor-toggle
