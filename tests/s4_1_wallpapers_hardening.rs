@@ -41,28 +41,12 @@ fn render_with_files(tag: &str, files: &[&str]) -> Buffer {
     term.backend().buffer().clone()
 }
 
-fn items_hits(buf: &Buffer, text: &str) -> Vec<(u16, u16)> {
-    find_text(buf, text)
-        .into_iter()
-        .filter(|&(x, _)| (ITEMS_X_START..ITEMS_X_END).contains(&x))
-        .collect()
-}
-
-fn items_row(buf: &Buffer, text: &str) -> u16 {
-    items_hits(buf, text)
-        .first()
-        .unwrap_or_else(|| {
-            panic!(
-                "`{text}` not found in items column; buffer:\n{}",
-                buffer_lines(buf).join("\n")
-            )
-        })
-        .1
-}
-
 /// Asserts the given names appear in the items column in strictly increasing row order.
 fn assert_order(buf: &Buffer, names: &[&str]) {
-    let rows: Vec<u16> = names.iter().map(|n| items_row(buf, n)).collect();
+    let rows: Vec<u16> = names
+        .iter()
+        .map(|n| row_of(buf, n, ITEMS_X_START, ITEMS_X_END))
+        .collect();
     for i in 1..names.len() {
         assert!(
             rows[i - 1] < rows[i],
@@ -108,7 +92,7 @@ fn media_types_and_case_insensitive_order() {
         ],
     );
     assert!(
-        items_hits(&buf, "doc.pdf").is_empty(),
+        items_hits(&buf, "doc.pdf", ITEMS_X_START, ITEMS_X_END).is_empty(),
         "doc.pdf must be hidden; buffer:\n{}",
         buffer_lines(&buf).join("\n")
     );
@@ -121,7 +105,7 @@ fn lone_jpg_stays_when_no_video_shares_stem() {
     let buf = render_with_files("s41-solo", &["solo.jpg", "b.mp4", "b.jpg"]);
     assert_order(&buf, &["b.mp4", "solo.jpg"]);
     assert!(
-        items_hits(&buf, "b.jpg").is_empty(),
+        items_hits(&buf, "b.jpg", ITEMS_X_START, ITEMS_X_END).is_empty(),
         "b.jpg must be hidden; buffer:\n{}",
         buffer_lines(&buf).join("\n")
     );

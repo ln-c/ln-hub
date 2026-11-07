@@ -370,6 +370,33 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     - `row_of` together with a `name_cell` helper;
     - the shared `l`,`j` setup in `app_on_img2` and `app_current_img1_cursor_img2`.
     Do this when s10 needs a highlight or row lookup.
+- review follow-up (pinned in tests/s10_toggle.rs):
+  - `j`/`k` move a highlighted monitor cursor, clamped at both ends. With modules
+    `[Monitors, Theme]`, `j` inside the Monitors items does not move the module column.
+  - The status reads `Applying DP-1 off…` → `Applied DP-1 off`. `Failed` shows
+    `Apply failed: <reason>` and does not re-query `hyprctl`.
+  - A second Enter while a job is running does nothing. Enter works again after `Done`.
+  - Spawn errors: `NotFound` → `<prog> not found: …`, other kinds → `Failed to start <prog>: …`,
+    for both `ln-themectl` and `ln-monitorctl`.
+  - The cursor clamps when a refresh shrinks the list. A refusal leaves no job in flight. A
+    cursor starting on a disabled first monitor toggles it `on`.
+  - Characterisation: Enter with items unfocused, on an empty wallpaper list, and on Monitors
+    with no usable list does nothing.
+- Carried notes resolved here: one focus check (`focused_module()`), `Apply` generalised to
+  `Job` with an `OnDone` reload, the spawn-error wording split, the Enter-unfocused/empty
+  pins, and the test-helper dedup into `tests/common` (except the two-line `l`,`j` setup in
+  s6, see S12).
+- Decisions:
+  - The status is not cleared; it stays until the next message. Enter while a job is running
+    stays silent. Re-check both in the S13 manual VM run.
+  - The toggle wording reuses `Applying`/`Applied`/`Apply failed` with `<name> <on|off>`.
+- Moved on:
+  - (to S13) `Loaded | Unavailable` enum and a `No monitors` message; still unpinned: a
+    missing field makes the whole list unavailable, and `[]` shows a blank list.
+  - (to S12) Replace the repeated `in_theme`/`in_monitors` guard arms with per-pane dispatch;
+    one shared `Cursor` type for the duplicated clamp logic; optionally a `Power { On, Off }`
+    enum instead of `action: &'static str`.
+  - (accepted) `tick` reloads monitors even after leaving the Monitors view. Harmless.
 
 ### Slice 11
 - slice_id: S11-palette-live
@@ -413,6 +440,16 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     together with `h` / focus handling.
   - (S9) Consider a `Pane` trait if the filter needs dispatch across panes. With two panes, a
     `match` is enough.
+  - (S10) Replace the repeated `in_theme` / `in_monitors` guard arms in `App::handle_key` with
+    per-pane dispatch. Extract one `Cursor` type for the clamp logic duplicated in
+    `ThemePane` and `MonitorsPane`. Optionally use a `Power { On, Off }` enum instead of
+    `Toggle::Run { action: &'static str }`.
+  - (S10, tests) Test-helper nits in `tests/common`:
+    - move the `draw(app)` and `assert_status(app, …)` wrappers duplicated in s6 and s10;
+    - share the `l`,`j` setup of `app_on_img2` and `app_current_img1_cursor_img2` in s6;
+    - add a doc line on `items_hits` (starts in the column) versus `items_hit_within` (fully
+      inside);
+    - rename the `Style` alias to `CellStyle` so it does not clash with `ratatui::style::Style`.
 
 ### Slice 13
 - slice_id: S13-bin
@@ -454,3 +491,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
       exact `hl.env("K", "v")` spacing is required and escapes are not handled. That is fine
       for a file `ln-themectl` writes.
     - (S8) `parse_size` accepts `+16`, which is harmless because the size is re-serialised.
+  - (S10) `MonitorsPane` uses `Some(vec![])` for both "not loaded" and "no monitors". Switch to
+    a `Loaded | Unavailable` enum if a `No monitors` message is wanted. Still unpinned: one
+    entry missing a field makes the whole list unavailable, and `[]` shows a blank list.
+  - (S10) Manual check: the status is never cleared and Enter while a job runs is silent.
+    Confirm this reads well in foot.

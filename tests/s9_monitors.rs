@@ -7,11 +7,10 @@
 
 mod common;
 
-use std::fs;
 use std::io;
 
 use common::*;
-use ln_hub::{App, Config, JobState};
+use ln_hub::{App, JobState};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -81,39 +80,15 @@ fn hyprctl_call() -> (String, Vec<String>) {
     )
 }
 
-/// App with the module column on Monitors (`j`) and the items column focused (`l`). The wallpaper
-/// dir holds img1.png / img2.png so a leaking Theme list would be visible.
-fn monitors_app(name: &str, sys: &FakeSystem) -> App {
-    let home = tempdir(&format!("{name}-home"));
-    let dir = tempdir(&format!("{name}-wall"));
-    for n in ["img1.png", "img2.png"] {
-        fs::write(dir.join(n), b"x").unwrap();
-    }
-    let mut cfg = Config::default_for(&home);
-    cfg.wallpaper_dir = dir;
-    let mut app = App::new(cfg, Box::new(sys.clone()));
-    app.handle_key(key(KeyCode::Char('j')));
-    app.handle_key(key(KeyCode::Char('l')));
-    app
-}
-
 fn draw(app: &mut App) -> Buffer {
     let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
     term.draw(|f| app.render(f)).unwrap();
     term.backend().buffer().clone()
 }
 
-fn dump(buf: &Buffer) -> String {
-    buffer_lines(buf).join("\n")
-}
-
 /// The row `y` where `text` starts inside the items column, if it is drawn there.
 fn row_in_items(buf: &Buffer, text: &str) -> Option<u16> {
-    let len = text.chars().count() as u16;
-    find_text(buf, text)
-        .into_iter()
-        .find(|&(x, _)| x >= ITEMS_X_START && x + len <= ITEMS_X_END)
-        .map(|(_, y)| y)
+    items_hit_within(buf, text, ITEMS_X_START, ITEMS_X_END).map(|(_, y)| y)
 }
 
 #[test]
@@ -232,29 +207,6 @@ fn monitors_view_shows_neither_the_font_line_nor_the_wallpaper_list() {
     }
 }
 
-/// App with the given keys pressed in order; the wallpaper dir holds img1.png / img2.png.
-fn app_after_keys(name: &str, sys: &FakeSystem, keys: &[char]) -> App {
-    let home = tempdir(&format!("{name}-home"));
-    let dir = tempdir(&format!("{name}-wall"));
-    for n in ["img1.png", "img2.png"] {
-        fs::write(dir.join(n), b"x").unwrap();
-    }
-    let mut cfg = Config::default_for(&home);
-    cfg.wallpaper_dir = dir;
-    let mut app = App::new(cfg, Box::new(sys.clone()));
-    for &c in keys {
-        app.handle_key(key(KeyCode::Char(c)));
-    }
-    app
-}
-
-fn hyprctl_runs(sys: &FakeSystem) -> usize {
-    sys.run_calls()
-        .iter()
-        .filter(|(prog, _)| prog == "hyprctl")
-        .count()
-}
-
 fn shows(app: &mut App, text: &str) -> bool {
     buffer_lines(&draw(app)).iter().any(|l| l.contains(text))
 }
@@ -364,10 +316,11 @@ fn pressing_l_again_on_monitors_requeries_hyprctl() {
 }
 
 #[test]
-fn f_s_and_enter_do_nothing_on_monitors() {
-    // Catches: Theme-only keys (font prompts, apply wallpaper) firing while Monitors items are
-    // focused, e.g. a guard on `items_focused` alone instead of "Theme items focused".
-    for k in [KeyCode::Char('f'), KeyCode::Char('s'), KeyCode::Enter] {
+fn f_and_s_do_nothing_on_monitors() {
+    // Catches: Theme-only keys (font prompts) firing while Monitors items are focused, e.g. a
+    // guard on `items_focused` alone instead of "Theme items focused". (`Enter` on Monitors is the
+    // toggle, pinned in S10, including that it never spawns `ln-themectl`.)
+    for k in [KeyCode::Char('f'), KeyCode::Char('s')] {
         let sys = FakeSystem::new();
         sys.set_stdout("hyprctl", MONITORS_JSON);
         let mut a = monitors_app("s9-theme-keys", &sys);

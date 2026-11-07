@@ -71,10 +71,6 @@ fn assert_preview_row(buf: &Buffer, text: &str) {
     );
 }
 
-fn press(app: &mut App, c: char) {
-    app.handle_key(key(KeyCode::Char(c)));
-}
-
 fn draw(app: &mut App) -> Buffer {
     let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
     term.draw(|f| app.render(f)).unwrap();
@@ -85,10 +81,6 @@ fn preview_has(buf: &Buffer, text: &str) -> bool {
     find_text(buf, text)
         .iter()
         .any(|&(x, _)| x >= PREVIEW_X_START)
-}
-
-fn dump(buf: &Buffer) -> String {
-    buffer_lines(buf).join("\n")
 }
 
 fn assert_preview_has(buf: &Buffer, text: &str) {

@@ -18,15 +18,12 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
-use ratatui::style::{Color, Modifier};
 
 const W: u16 = 80;
 const H: u16 = 24;
 const ITEMS_X_START: u16 = 20;
 const ITEMS_X_END: u16 = 40;
 const NAMES: [&str; 3] = ["img1.png", "img2.png", "img3.png"];
-
-type Style = (Color, Color, Modifier);
 
 fn touch(path: &Path) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -54,45 +51,13 @@ fn focus_and_draw(cfg: Config) -> Buffer {
     term.backend().buffer().clone()
 }
 
-fn items_hits(buf: &Buffer, text: &str) -> Vec<(u16, u16)> {
-    find_text(buf, text)
-        .into_iter()
-        .filter(|&(x, _)| (ITEMS_X_START..ITEMS_X_END).contains(&x))
-        .collect()
-}
-
-fn dump(buf: &Buffer) -> String {
-    buffer_lines(buf).join("\n")
-}
-
-fn name_pos(buf: &Buffer, name: &str) -> (u16, u16) {
-    *items_hits(buf, name)
-        .first()
-        .unwrap_or_else(|| panic!("`{name}` not found in items column; buffer:\n{}", dump(buf)))
-}
-
-fn name_style(buf: &Buffer, name: &str) -> Style {
-    let (x, y) = name_pos(buf, name);
-    let c = &buf[(x, y)];
-    (c.fg, c.bg, c.modifier)
-}
-
 /// Asserts exactly `expected` is highlighted among img1..img3 (see module docs).
 fn assert_only_highlighted(buf: &Buffer, expected: &str) {
-    let styles: Vec<(&str, Style)> = NAMES.iter().map(|n| (*n, name_style(buf, n))).collect();
-    let others: Vec<&(&str, Style)> = styles.iter().filter(|(n, _)| *n != expected).collect();
-    let hl = styles.iter().find(|(n, _)| *n == expected).unwrap().1;
-    assert!(
-        others.iter().all(|(_, s)| *s == others[0].1),
-        "non-highlighted rows must share one style, got {styles:?}; buffer:\n{}",
-        dump(buf)
-    );
-    assert_ne!(
-        hl,
-        others[0].1,
-        "`{expected}` must be the highlighted row (style must differ from the others), got {styles:?}; buffer:\n{}",
-        dump(buf)
-    );
+    common::assert_only_highlighted(buf, &NAMES, expected, |b, n| {
+        items_hits(b, n, ITEMS_X_START, ITEMS_X_END)
+            .first()
+            .copied()
+    });
 }
 
 #[test]
@@ -105,8 +70,8 @@ fn current_wallpaper_is_marked_and_preselected() {
     cfg.current_wallpaper_file = cur;
     let buf = focus_and_draw(cfg);
 
-    let (_, img2_y) = name_pos(&buf, "img2.png");
-    let marks = items_hits(&buf, "●");
+    let (_, img2_y) = name_cell(&buf, "img2.png", ITEMS_X_START, ITEMS_X_END);
+    let marks = items_hits(&buf, "●", ITEMS_X_START, ITEMS_X_END);
     assert_eq!(
         marks.iter().map(|&(_, y)| y).collect::<Vec<_>>(),
         vec![img2_y],
@@ -125,7 +90,7 @@ fn missing_current_file_has_no_marker_and_highlights_first_item() {
     let buf = focus_and_draw(cfg);
 
     assert!(
-        items_hits(&buf, "●").is_empty(),
+        items_hits(&buf, "●", ITEMS_X_START, ITEMS_X_END).is_empty(),
         "no `●` expected without a current_wallpaper file; buffer:\n{}",
         dump(&buf)
     );
@@ -143,7 +108,7 @@ fn current_path_outside_list_has_no_marker_and_highlights_first_item() {
     let buf = focus_and_draw(cfg);
 
     assert!(
-        items_hits(&buf, "●").is_empty(),
+        items_hits(&buf, "●", ITEMS_X_START, ITEMS_X_END).is_empty(),
         "no `●` expected when the current path is not in the list; buffer:\n{}",
         dump(&buf)
     );
