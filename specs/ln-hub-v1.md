@@ -620,6 +620,52 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   over to the VM test in the dotfiles repo:
   - the sixel image disappears when moving off an image and redraws correctly on resize;
   - j/k through many large images stays responsive;
-  - the help line at 80 columns (it truncates);
+  - the help line: fits at 80 columns, truncates below 80;
   - monitor rows at 80 columns (S9) and the status / silent Enter while a job runs (S10);
   - a terminal that does not answer the picker query starts with halfblocks, not a hang.
+- Manual VM run (2026-11-07): QEMU VM (snapshot), Hyprland 0.57.1, foot, release build made in the
+  guest, 12 generated 3840x2160 jpgs + 3 png + 3 small jpg in `~/Pictures/Wallpapers`. Floating
+  foot 990x660 px = 80x24. Evidence images are in `tests/manual/s13/`.
+  - PASS acceptance: `--version` prints `ln-hub 0.1.0`, rc 0; `--config /nonexistent.toml` stderr
+    `ln-hub: config /nonexistent.toml: No such file or directory (os error 2)`, rc 2;
+    modules=["Audio"] stderr `ln-hub: config ...: unknown module: Audio`, rc 2.
+  - 1 PASS startup, execve to the end of the first frame (two writes, 1023 B + 482 B), in foot, 5
+    runs: 3.9, 2.4, 1.7, 1.5, 0.9 ms (cold first run 3.9). Measured with
+    `strace --seccomp-bpf -f -tt -e trace=execve,write`. Includes exec, config load, discover,
+    terminal init and the first `draw`. Excludes foot's own startup and the picker query, which is
+    sent after the first frame. In a terminal that does not answer: 2.0 ms (see 9).
+  - 2 PASS sixel visible in foot: `tests/manual/s13/02-sixel-visible.png`.
+  - 3 PASS sixel gone on Monitors, `tests/manual/s13/03b-sixel-gone-on-monitors.png`; redrawn on
+    return, `tests/manual/s13/03c-sixel-redraw-after-return.png`; redrawn after `resizeactive`
+    larger, `tests/manual/s13/03d-sixel-after-resize-larger.png`, smaller,
+    `tests/manual/s13/03e-sixel-after-resize-smaller.png`, and `togglefloating` (tiled),
+    `tests/manual/s13/03f-sixel-after-tile.png`. Before: `tests/manual/s13/03a-sixel-on-image.png`.
+  - 4 PASS j/k bursts (11x j and 11x k at 20 ms, 17x j at 5 ms) over the 3840x2160 jpgs: stdout
+    gaps stay 24-43 ms while keys arrive, 1-3 sixel writes (~170-200 KB each) per burst, final
+    image correct: `tests/manual/s13/04-jk-many-large-images.png`.
+  - 5 PASS apply wallpaper: waybar PID 7268 -> 9103 (new within 1.5 s); j/k handled during the
+    job; `Applying wp_small_1.jpg…` in `tests/manual/s13/05b-applying.png` and
+    `tests/manual/s13/05c-mid-apply.png`; then `Applied wp_small_1.jpg` and `●` moved from
+    `videos/frieren_m…` to `wp_small_1.jpg` in `tests/manual/s13/05d-applied.png`. Before:
+    `tests/manual/s13/05a-before-apply.png`.
+  - 6 PASS S10: Enter while the job ran showed nothing and started no second job (`jobs.log`
+    holds one `Using image wp_small_1.jpg` run), j still moved the cursor:
+    `tests/manual/s13/06a-applying-enter-silent-j-moved.png`. The status stays after moving:
+    `tests/manual/s13/06b-status-persists-after-moving.png`.
+  - 7 PASS, fits at 80, truncates below; note reworded: at 80 columns the help line with quit key
+    `q` is exactly 80 characters and shows in full, `tests/manual/s13/07-help-80col.png`. At 70
+    columns it ends at `?`, `tests/manual/s13/07b-help-70col-truncates.png`.
+  - 8 NEEDS USER CONFIRMATION: second output via `hyprctl output create headless`, 2 rows. At 80
+    columns the items column is 19 wide and cuts the S9 rows `<name>  <w>x<h>@<hz>  on|off`
+    to `Virtual-1  1268x13` and `HEADLESS-1  1920x1`; the `@hz` and `on/off` state is lost, and
+    the preview pane is empty. `tests/manual/s13/08-monitors-80col.png`. S9 pins the row text
+    but not its width, so whether this is acceptable is a design call.
+  - 9 FAIL (bug): terminal that never answers the picker query (python pty, 24x80, no sixel
+    support). First frame is drawn at 2.0 ms, then the UI is frozen for about 2 s (picker
+    query timeout, `Picker::from_query_stdio`), then falls back to halfblocks. It does not hang
+    for good, but the freeze eats keys and the first key after it. `q` sent at 0.2 s, 1.0 s and 2.2 s were all lost; `q` at 3.0 s was lost and
+    `q` at 4.0 s exited rc 0. After the window, keys work and the preview renders as halfblocks
+    (output has 970 `▀` / 163 `▄`, no sixel `ESC P`, one kitty query `ESC _G`; `x`, `l`, `j` at 2.6 /
+    3.0 / 3.5 s, `q` at 5.5 s exited rc 0). Cause: the picker query runs on the main thread
+    before the loop and leaves a stdin reader thread that takes the next key. Not run with
+    `ssh -tt`.
