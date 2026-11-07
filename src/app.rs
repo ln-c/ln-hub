@@ -6,6 +6,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::config::{Config, Module};
 use crate::font;
+use crate::monitor::MonitorsPane;
 use crate::style::HIGHLIGHT;
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
@@ -47,6 +48,7 @@ pub struct App {
     modules: Vec<Module>,
     quit_key: char,
     theme: ThemePane,
+    monitors: MonitorsPane,
     sys: Box<dyn System>,
     items_focused: bool,
     selected: usize,
@@ -66,6 +68,7 @@ impl App {
                 &cfg.current_wallpaper_file,
                 &cfg.hypr_env_file,
             ),
+            monitors: MonitorsPane::new(),
             sys,
             items_focused: false,
             selected: 0,
@@ -87,7 +90,7 @@ impl App {
             KeyCode::Char('j') if in_items => self.theme.move_cursor(1),
             KeyCode::Char('k') if in_items => self.theme.move_cursor(-1),
             KeyCode::Char('j') if self.selected + 1 < self.modules.len() => self.selected += 1,
-            KeyCode::Char('l') => self.items_focused = true,
+            KeyCode::Char('l') => self.focus_items(),
             KeyCode::Char('f') if in_items => self.prompt = Some(Prompt::FontName(String::new())),
             KeyCode::Char('s') if in_items => self.prompt = Some(Prompt::FontSize(String::new())),
             KeyCode::Enter if in_items && self.apply.is_none() => self.apply_selected(),
@@ -136,14 +139,13 @@ impl App {
         let mut state = ListState::default().with_selected(Some(self.selected));
         f.render_stateful_widget(list, modules_area, &mut state);
 
-        let items_block = Block::bordered().title("Items");
-        let preview_block = Block::bordered().title("Preview");
-        if theme_active {
-            self.theme.render(f, items_area, items_block);
-            self.theme.render_preview(f, preview_area, preview_block);
-        } else {
-            f.render_widget(items_block, items_area);
-            f.render_widget(preview_block, preview_area);
+        match self.focused_module() {
+            Some(Module::Theme) => self.theme.render(f, items_area, preview_area),
+            Some(Module::Monitors) => self.monitors.render(f, items_area, preview_area),
+            None => {
+                f.render_widget(Block::bordered().title("Items"), items_area);
+                f.render_widget(Block::bordered().title("Preview"), preview_area);
+            }
         }
 
         self.render_status(f, status_area, theme_active);
@@ -166,6 +168,22 @@ impl App {
         };
         f.render_widget(Paragraph::new(left), left_area);
         f.render_widget(Paragraph::new(font_text), font_area);
+    }
+
+    /// The module whose panes are drawn: the selected one once the items column is focused.
+    fn focused_module(&self) -> Option<Module> {
+        self.modules
+            .get(self.selected)
+            .copied()
+            .filter(|_| self.items_focused)
+    }
+
+    /// `l`: moves focus to the items column, refreshing the monitor list when entering Monitors.
+    fn focus_items(&mut self) {
+        self.items_focused = true;
+        if self.focused_module() == Some(Module::Monitors) {
+            self.monitors.load(self.sys.as_ref());
+        }
     }
 
     /// Whether the module column is on the Theme module.

@@ -3,6 +3,7 @@
 mod app;
 mod config;
 mod font;
+mod monitor;
 mod palette;
 mod style;
 mod system;
