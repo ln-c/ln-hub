@@ -1,0 +1,18 @@
+  1460.4 ms    items-empty |                                        Font: Terminess Nerd Font Propo, size 15|
+  1760.3 ms       prompt-/ |Filter:                                 Font: Terminess Nerd Font Propo, size 15|
+  1983.2 ms        typed-5 |Filter: aaaaa                           Font: Terminess Nerd Font Propo, size 15|
+  2234.2 ms       typed-15 |Filter: aaaaaaaaaaaaaaa                 Font: Terminess Nerd Font Propo, size 15|
+  2483.5 ms       typed-20 |Filter: aaaaaaaaaaaaaaaaaaaa            Font: Terminess Nerd Font Propo, size 15|
+  2730.8 ms       typed-24 |Filter: aaaaaaaaaaaaaaaaaaaaaaaa        Font: Terminess Nerd Font Propo, size 15|
+  2980.2 ms       typed-25 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaa       Font: Terminess Nerd Font Propo, size 15|
+  3235.1 ms       typed-26 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaa      Font: Terminess Nerd Font Propo, size 15|
+  3484.8 ms       typed-27 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaa     Font: Terminess Nerd Font Propo, size 15|
+  3730.2 ms       typed-28 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaa    Font: Terminess Nerd Font Propo, size 15|
+  3988.0 ms       typed-29 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaa   Font: Terminess Nerd Font Propo, size 15|
+  4237.2 ms       typed-30 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  Font: Terminess Nerd Font Propo, size 15|
+  4485.2 ms       typed-31 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa Font: Terminess Nerd Font Propo, size 15|
+  4732.0 ms       typed-32 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                                        |
+  4986.5 ms       typed-33 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                                       |
+  5234.9 ms       typed-34 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                                      |
+  5485.3 ms       typed-39 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                                 |
+  5730.9 ms       typed-49 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa                       |

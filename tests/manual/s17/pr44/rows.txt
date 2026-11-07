@@ -1,0 +1,18 @@
+  1457.1 ms    items-empty |    Font: Terminess Nerd Font Propo, size 15|
+  1754.7 ms       prompt-/ |Filter:                                     |
+  1976.0 ms        typed-5 |Filter: aaaaa                               |
+  2227.4 ms       typed-15 |Filter: aaaaaaaaaaaaaaa                     |
+  2477.3 ms       typed-20 |Filter: aaaaaaaaaaaaaaaaaaaa                |
+  2731.2 ms       typed-24 |Filter: aaaaaaaaaaaaaaaaaaaaaaaa            |
+  2981.8 ms       typed-25 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaa           |
+  3225.1 ms       typed-26 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaa          |
+  3475.9 ms       typed-27 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaa         |
+  3727.6 ms       typed-28 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaa        |
+  3974.5 ms       typed-29 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaa       |
+  4231.1 ms       typed-30 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa      |
+  4480.9 ms       typed-31 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa     |
+  4729.6 ms       typed-32 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa    |
+  4977.6 ms       typed-33 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   |
+  5229.4 ms       typed-34 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  |
+  5482.4 ms       typed-39 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  5731.7 ms       typed-49 |Filter: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|

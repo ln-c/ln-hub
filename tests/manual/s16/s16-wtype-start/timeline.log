@@ -1,0 +1,13 @@
+     0.1 ms  spawn cmd=['/tmp/ln-hub'] winsize=24x80 silent=False
+     3.2 ms  ACTION wtype 'ljj' (after start+0.0ms)
+     8.8 ms  EVENT init: status row shows Initializing…
+     9.5 ms  stdin->child b'\x1b[6;26;12t\x1b[?62;4;22;28;52c'
+    33.4 ms  stdin->child b'l'
+    37.6 ms  stdin->child b'j'
+    41.8 ms  stdin->child b'j'
+   104.2 ms  EVENT ready: status row shows Ready
+  1005.5 ms  ACTION dump 'after-ljj' (after ready+900.0ms)
+  1006.3 ms  ACTION grim 'after-ljj' (after ready+900.0ms)
+  1107.6 ms  EVENT readygone: Ready cleared (1003 ms after Ready)
+  1408.1 ms  ACTION inject 'q' (after ready+1300.0ms)
+  1410.9 ms  child exited status=0

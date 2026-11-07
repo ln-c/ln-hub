@@ -1,0 +1,12 @@
+     0.3 ms  spawn cmd=['/tmp/ln-hub'] winsize=24x80 silent=False
+    12.4 ms  EVENT init: status row shows Initializing…
+    13.5 ms  stdin->child b'\x1b[6;26;12t\x1b[?62;4;22;28;52c'
+    53.5 ms  EVENT ready: status row shows Ready
+  1059.1 ms  EVENT readygone: Ready cleared (1006 ms after Ready)
+  1259.1 ms  ACTION inject 'l' (after readygone+200.0ms)
+  2260.7 ms  ACTION grim 'sixel-on-l' (after readygone+1200.0ms)
+  2261.6 ms  ACTION row 'status' (after readygone+1200.0ms)
+  2564.8 ms  ACTION inject 'j' (after readygone+1500.0ms)
+  3561.4 ms  ACTION grim 'sixel-after-j' (after readygone+2500.0ms)
+  4061.8 ms  ACTION inject 'q' (after readygone+3000.0ms)
+  4064.5 ms  child exited status=0

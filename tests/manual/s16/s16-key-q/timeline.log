@@ -1,0 +1,6 @@
+     0.1 ms  spawn cmd=['/tmp/ln-hub'] winsize=24x80 silent=False
+     5.3 ms  EVENT init: status row shows Initializing…
+     6.0 ms  stdin->child b'\x1b[6;26;12t\x1b[?62;4;22;28;52c'
+    53.5 ms  EVENT ready: status row shows Ready
+   253.7 ms  ACTION inject 'q' (after ready+200.0ms)
+   255.9 ms  child exited status=0

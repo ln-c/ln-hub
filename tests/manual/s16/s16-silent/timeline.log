@@ -1,0 +1,15 @@
+     0.1 ms  spawn cmd=['/tmp/ln-hub'] winsize=24x80 silent=True
+     3.0 ms  stripped queries from output (43 bytes)
+     5.7 ms  EVENT init: status row shows Initializing…
+    26.3 ms  ACTION inject 'j' (after init+20.0ms)
+    38.4 ms  ACTION grim 'a-init-silent' (after init+30.0ms)
+    38.8 ms  ACTION dump 'a-init-silent' (after init+30.0ms)
+   252.8 ms  EVENT ready: status row shows Ready
+   353.3 ms  ACTION grim 'b-ready-silent-key-in-window-dropped' (after ready+100.0ms)
+   355.0 ms  ACTION row 'ready-after-early-j' (after ready+100.0ms)
+   408.6 ms  ACTION inject 'j' (after ready+150.0ms)
+   409.7 ms  EVENT readygone: Ready cleared (157 ms after Ready)
+   557.6 ms  ACTION row 'after-late-j' (after ready+300.0ms)
+   604.1 ms  ACTION grim 'c-late-j-handled' (after ready+350.0ms)
+  1555.9 ms  ACTION inject 'q' (after ready+1300.0ms)
+  1557.8 ms  child exited status=0

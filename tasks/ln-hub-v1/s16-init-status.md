@@ -85,3 +85,5 @@ status: green
     `s16_pty.rs` instead is the alternative.
   - Not in scope: a spinner, an elapsed-time counter, replaying the dropped keys (S14), and any
     text for the image decode (`Pending` previews stay as they are).
+
+- Manual VM evidence (2026-11-07): VM-verified 2026-11-07, evidence in `tests/manual/s16`. `Initializing…` seen in foot (~45-50 ms) and for the full 250 ms on a silent terminal; `Ready` clears after ~1 s or on the first key; keys after `Ready` are handled, keys inside the query window are dropped by design (S14). Notes in `tests/manual/s16/notes.md`.

@@ -65,3 +65,5 @@ status: green
     wider than the room, it is a RED test to revisit, not to loosen.
   - Not in scope: wrapping the help line to two rows, a second status row, a width-adaptive
     short help, or moving `F` to the Items block title.
+
+- Manual VM evidence (2026-11-07): VM-verified 2026-11-07, evidence in `tests/manual/s17`. With a 40-cell font summary and the 80-cell help line, `Font: …` is whole with >= 1 blank or omitted whole at widths 176/121/120/80/44/39/28 (help, filter prompt, job status); with empty left it is right-aligned and clipped by the row edge. Notes in `tests/manual/s17/notes.md`.

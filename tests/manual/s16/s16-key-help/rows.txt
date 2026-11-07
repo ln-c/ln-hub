@@ -1,0 +1,2 @@
+   253.4 ms     before-key |Ready                                                                           |
+   352.9 ms     after-help |h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  q quit|

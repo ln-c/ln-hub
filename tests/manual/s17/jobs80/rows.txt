@@ -1,0 +1,14 @@
+  2661.8 ms   before-apply |                                        Font: Terminess Nerd Font Propo, size 15|
+  2867.7 ms  after-enter-1 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  2965.0 ms  after-enter-2 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3063.1 ms  after-enter-3 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3162.9 ms  after-enter-4 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3265.9 ms  after-enter-5 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3363.0 ms  after-enter-6 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3465.7 ms  after-enter-7 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3563.9 ms  after-enter-8 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3666.9 ms  after-enter-9 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3765.2 ms after-enter-10 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3862.7 ms after-enter-11 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  3964.6 ms after-enter-12 |Applying wp_small_1.jpg…                Font: Terminess Nerd Font Propo, size 15|
+  6066.6 ms           late |Applied wp_small_1.jpg                  Font: Terminess Nerd Font Propo, size 15|

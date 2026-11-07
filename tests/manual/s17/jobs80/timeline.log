@@ -1,0 +1,30 @@
+     1.4 ms  spawn cmd=['/tmp/ln-hub'] winsize=24x80 silent=False
+     5.6 ms  EVENT init: status row shows Initializing…
+    11.1 ms  stdin->child b'\x1b[6;26;12t\x1b[?62;4;22;28;52c'
+    52.8 ms  EVENT ready: status row shows Ready
+  1061.2 ms  EVENT readygone: Ready cleared (1008 ms after Ready)
+  1262.2 ms  ACTION inject 'l' (after readygone+200.0ms)
+  1561.6 ms  ACTION inject '/' (after readygone+500.0ms)
+  1764.4 ms  ACTION inject 'wp_small' (after readygone+700.0ms)
+  1965.3 ms  ACTION inject '\\r' (after readygone+900.0ms)
+  2661.7 ms  ACTION row 'before-apply' (after readygone+1600.0ms)
+  2761.6 ms  ACTION inject '\\r' (after readygone+1700.0ms)
+  2867.7 ms  ACTION row 'after-enter-1' (after readygone+1800.0ms)
+  2965.0 ms  ACTION row 'after-enter-2' (after readygone+1900.0ms)
+  2965.4 ms  ACTION grim 'job-status' (after readygone+1900.0ms)
+  2969.7 ms  ACTION dump 'job-status' (after readygone+1900.0ms)
+  3063.0 ms  ACTION row 'after-enter-3' (after readygone+2000.0ms)
+  3162.8 ms  ACTION row 'after-enter-4' (after readygone+2100.0ms)
+  3265.8 ms  ACTION row 'after-enter-5' (after readygone+2200.0ms)
+  3362.9 ms  ACTION row 'after-enter-6' (after readygone+2300.0ms)
+  3465.6 ms  ACTION row 'after-enter-7' (after readygone+2400.0ms)
+  3563.8 ms  ACTION row 'after-enter-8' (after readygone+2500.0ms)
+  3666.9 ms  ACTION row 'after-enter-9' (after readygone+2600.0ms)
+  3765.0 ms  ACTION row 'after-enter-10' (after readygone+2700.0ms)
+  3862.6 ms  ACTION row 'after-enter-11' (after readygone+2800.0ms)
+  3964.5 ms  ACTION row 'after-enter-12' (after readygone+2900.0ms)
+  6066.5 ms  ACTION row 'late' (after readygone+5000.0ms)
+  6067.0 ms  ACTION grim 'job-late' (after readygone+5000.0ms)
+  6463.6 ms  ACTION sh 'pkill -x ln-hub' (after readygone+5400.0ms)
+  6468.7 ms  child exited status=None
+  6468.7 ms  child exit status=15
