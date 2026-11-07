@@ -247,6 +247,16 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - `current_wallpaper` file contains `<dir>/img2.png\n` → the `img2.png` row contains `●` and is
     highlighted on entering Theme.
   - A missing file → no `●`, and the highlight is on the first item.
+  - (Review follow-up) A `current_wallpaper` path not in the list (e.g. same file name outside
+    the wallpaper dir) → no `●`, highlight on the first item.
+- Review notes carried to later slices:
+  - S6: add `ThemePane::selected() -> Option<&Wallpaper>` (None on an empty list), route `j`/`k`
+    to the focused column, and re-read `current_wallpaper` after a job is `Done` so `●` moves.
+  - S6: `App` will dispatch both `handle_key` and items render per `Module`; replace the
+    `Module::Theme` `if` with one `match` (or a pane trait once a second pane exists, not before).
+  - The slice that adds `j`/`k` in items: pick up the S3.1 deferral (key-conflict validation and
+    an `Action` keymap table).
+  - If `current_wallpaper` is reloaded (S6 / `tick`), reuse one private load fn in `ThemePane`.
 
 ### Slice 6
 - slice_id: S6-apply-wallpaper
