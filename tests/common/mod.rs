@@ -24,6 +24,9 @@ pub struct FakeSystem {
     pub stdout: Arc<Mutex<Vec<(String, String)>>>,
     /// State returned by `poll` for every job. Default: Done.
     pub job_state: Arc<Mutex<JobState>>,
+    /// Programs whose `run` records the call then fails with (kind, message), keyed by `prog`
+    /// (exact match). Default: empty.
+    pub run_errors: Arc<Mutex<Vec<(String, io::ErrorKind, String)>>>,
     /// When set, `spawn` records the call then fails with this (kind, message). Default: None.
     pub spawn_error: Arc<Mutex<Option<(io::ErrorKind, String)>>>,
 }
@@ -35,6 +38,7 @@ impl FakeSystem {
             spawns: Arc::default(),
             next_job: Arc::new(AtomicU64::new(1)),
             stdout: Arc::default(),
+            run_errors: Arc::default(),
             job_state: Arc::new(Mutex::new(JobState::Done)),
             spawn_error: Arc::default(),
         }
@@ -43,6 +47,14 @@ impl FakeSystem {
     /// Makes every later `spawn` fail with `io::Error::new(kind, msg)`.
     pub fn set_spawn_error(&self, kind: io::ErrorKind, msg: &str) {
         *self.spawn_error.lock().unwrap() = Some((kind, msg.to_string()));
+    }
+
+    /// Makes every later `run` of `prog` fail with `io::Error::new(kind, msg)`.
+    pub fn set_run_error(&self, prog: &str, kind: io::ErrorKind, msg: &str) {
+        self.run_errors
+            .lock()
+            .unwrap()
+            .push((prog.to_string(), kind, msg.to_string()));
     }
 
     pub fn set_stdout(&self, prog: &str, out: &str) {
@@ -84,6 +96,15 @@ fn success_output(stdout: Vec<u8>) -> Output {
 impl System for FakeSystem {
     fn run(&self, prog: &str, args: &[&str]) -> io::Result<Output> {
         record(&self.runs, prog, args);
+        if let Some((_, kind, msg)) = self
+            .run_errors
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|(p, _, _)| p == prog)
+        {
+            return Err(io::Error::new(*kind, msg.clone()));
+        }
         let out = self
             .stdout
             .lock()
