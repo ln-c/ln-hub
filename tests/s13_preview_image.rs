@@ -81,7 +81,7 @@ fn assert_placed(img: &PreviewImage, buf: &Buffer, last_text_row: u16) {
         "area.x must be right of the left border, {ctx}"
     );
     assert!(
-        a.right() <= w - 1,
+        a.right() < w,
         "area must stay left of the right border, {ctx}"
     );
     assert!(a.y > block_top, "area must be below the top border, {ctx}");
