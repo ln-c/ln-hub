@@ -168,7 +168,7 @@ Slices S0–S18 are archived one file per slice under `docs/superpowers/plans/ar
 
 | slice | behavior | file | status |
 |---|---|---|---|
-| S0-monitorctl-fix | ln-monitorctl accepts any listed monitor and exits 0 (dotfiles prerequisite) | [s00-monitorctl-fix.md](../plans/archive/ln-hub-v1/s00-monitorctl-fix.md) | unverified |
+| S0-monitorctl-fix | ln-monitorctl accepts any listed monitor and exits 0 (dotfiles prerequisite) | [s00-monitorctl-fix.md](../plans/archive/ln-hub-v1/s00-monitorctl-fix.md) | green |
 | S1-shell-tracer | Three-column shell; module column lists Theme and Monitors; `q` quits | [s01-shell-tracer.md](../plans/archive/ln-hub-v1/s01-shell-tracer.md) | green |
 | S2-palette-parse | Palette parsed from wallust `colors.sh` | [s02-palette-parse.md](../plans/archive/ln-hub-v1/s02-palette-parse.md) | green |
 | S3-config | `config.toml` overrides paths, module order/visibility and keys | [s03-config.md](../plans/archive/ln-hub-v1/s03-config.md) | green |
@@ -194,4 +194,4 @@ Slices S0–S18 are archived one file per slice under `docs/superpowers/plans/ar
 | S21-pty-helper-dedup | The pty tests share one `find` / `wait_for` / `fail` in `tests/common/pty.rs` | [plan, Task 3](../plans/2026-11-07-s19-s24-followups.md) | green |
 | S22-sixel-off-ui-thread | Sixel resize+encode on a worker thread (`ThreadProtocol`); opt-in `LN_HUB_TIMING` log | [plan, Task 4](../plans/2026-11-07-s19-s24-followups.md) | green |
 | S23-evidence-lfs | VM evidence PNGs move to Git LFS (one new commit, no history rewrite) | [plan, Task 5](../plans/2026-11-07-s19-s24-followups.md) | green |
-| S24-vm-check | VM: run the S0 bats suite (flip S0 to green) and check S22's responsiveness and encode/draw timing | [plan, Task 6](../plans/2026-11-07-s19-s24-followups.md) | todo |
+| S24-vm-check | VM: run the S0 bats suite (flip S0 to green) and check S22's responsiveness and encode/draw timing | [plan, Task 6](../plans/2026-11-07-s19-s24-followups.md) | green |

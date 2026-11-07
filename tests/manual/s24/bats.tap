@@ -1,0 +1,15 @@
+1..14
+ok 1 DP-1 off with eDP-1 and DP-1 disables DP-1
+ok 2 DP-1 on with eDP-1 and DP-1 enables DP-1
+ok 3 unknown monitor is rejected with Invalid monitor and no eval
+ok 4 ini with two monitors disables eDP-1 and exits 0
+ok 5 ini with only eDP-1 does not disable anything and exits 0
+ok 6 eDP-1 off with eDP-1 and DP-1 disables eDP-1
+ok 7 unknown monitor reports Invalid monitor on stderr only, no eval
+ok 8 invalid action reports on/off usage on stderr only, no eval
+ok 9 hyprctl failure on DP-1 off reports hyprctl error, not Invalid monitor
+ok 10 ini with failing hyprctl exits 1 with hyprctl error and no eval
+ok 11 no arguments prints usage and monitor names on stdout, stderr empty, exit 1
+ok 12 DP-1 off queries hyprctl monitors all exactly once
+ok 13 ini queries hyprctl monitors all exactly once
+ok 14 DP-1 with no action disables DP-1

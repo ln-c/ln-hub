@@ -1,0 +1,20 @@
+     0.2 ms  spawn cmd=['env', 'LN_HUB_TIMING=/tmp/ev/shots1/timing.log', '/tmp/ln-hub'] winsize=43x176 silent=False
+     8.7 ms  EVENT init: status row shows Initializing…
+     8.8 ms  stdin->child b'\x1b[6;16;7t\x1b[?62;4;22;28;52c'
+    57.5 ms  EVENT ready: status row shows Ready
+  1059.6 ms  EVENT readygone: Ready cleared (1002 ms after Ready)
+  1260.9 ms  ACTION key 'l' (after readygone+200.0ms)
+  1266.6 ms  KEY sent 'l'
+  1281.6 ms  EFFECT key 'l' +15.0 ms after send; rows changed [1, 2, 3, 4, 42]; last row |                                                                                                                                        Font: Terminess Nerd Font Propo, size 15|
+  1291.6 ms  ACTION grim 'pending-decode' (after readygone+230.0ms)
+  1292.8 ms  ACTION dump 'pending-decode' (after readygone+230.0ms)
+  1896.8 ms  FAST window 1 open (chunk gap 10.2 ms, last key 630.3 ms ago)
+  1904.1 ms  ACTION grim 'pending-encode' (after fast1+0.0ms)
+  1904.8 ms  ACTION dump 'pending-encode' (after fast1+0.0ms)
+  1950.9 ms  SIXEL start in output chunk (2055 bytes)
+  1950.9 ms  FAST window 1 closed (sixel)
+  3764.5 ms  ACTION grim 'drawn' (after readygone+2700.0ms)
+  3766.7 ms  ACTION dump 'drawn' (after readygone+2700.0ms)
+  4563.2 ms  ACTION sh 'pkill -x ln-hub' (after readygone+3500.0ms)
+  4571.3 ms  child exited status=None
+  4571.4 ms  child exit status=15
