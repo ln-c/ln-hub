@@ -3,6 +3,7 @@
 mod app;
 mod config;
 mod palette;
+mod style;
 mod system;
 mod theme_pane;
 mod wallpaper;

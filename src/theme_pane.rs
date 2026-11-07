@@ -6,13 +6,18 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
-use crate::app::HIGHLIGHT;
+use crate::style::HIGHLIGHT;
 use crate::wallpaper::{self, Wallpaper};
 
 /// Row prefix for the applied wallpaper.
 const CURRENT_MARK: &str = "● ";
 /// Row prefix for every other wallpaper, keeping names aligned with the marked row.
 const PLAIN_MARK: &str = "  ";
+
+/// Whether `w` is the applied wallpaper.
+fn is_current(current: Option<&Path>, w: &Wallpaper) -> bool {
+    current == Some(w.path.as_path())
+}
 
 pub(crate) struct ThemePane {
     wallpaper_dir: PathBuf,
@@ -29,7 +34,7 @@ impl ThemePane {
         let current = wallpaper::read_current(current_file);
         let cursor = wallpapers
             .iter()
-            .position(|w| Some(&w.path) == current.as_ref())
+            .position(|w| is_current(current.as_deref(), w))
             .unwrap_or(0);
         ThemePane {
             wallpaper_dir,
@@ -50,7 +55,7 @@ impl ThemePane {
             .wallpapers
             .iter()
             .map(|w| {
-                let mark = if self.current.as_ref() == Some(&w.path) {
+                let mark = if is_current(self.current.as_deref(), w) {
                     CURRENT_MARK
                 } else {
                     PLAIN_MARK

@@ -1,15 +1,12 @@
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Modifier, Style};
 use ratatui::widgets::{Block, List, ListItem, ListState};
 
 use crate::config::{Config, Module};
+use crate::style::HIGHLIGHT;
 use crate::system::System;
 use crate::theme_pane::ThemePane;
-
-/// Highlight for the selected row of any list.
-pub(crate) const HIGHLIGHT: Style = Style::new().add_modifier(Modifier::REVERSED);
 
 /// Top-level application state: the module column and its selection, the Theme items pane,
 /// and the quit flag.
