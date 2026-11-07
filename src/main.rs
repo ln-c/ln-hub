@@ -3,6 +3,7 @@ mod image_view;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::thread;
 use std::time::Duration;
 
 use image_view::ImageView;
@@ -22,7 +23,10 @@ fn run(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
                 images.render(f, &preview);
             }
         })?;
-        if event::poll(Duration::from_millis(100))?
+        // The query thread owns stdin until it reports done; never two concurrent readers.
+        if images.query_pending() {
+            thread::sleep(Duration::from_millis(50));
+        } else if event::poll(Duration::from_millis(100))?
             && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
