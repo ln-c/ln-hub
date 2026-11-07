@@ -323,3 +323,14 @@ pub fn app_after_keys(name: &str, sys: &FakeSystem, keys: &[char]) -> App {
 pub fn monitors_app(name: &str, sys: &FakeSystem) -> App {
     app_after_keys(name, sys, &['j', 'l'])
 }
+
+/// Sets the modification time of `path` explicitly, so tests never depend on fs timestamp
+/// granularity or on how fast consecutive writes happen.
+pub fn set_mtime(path: &std::path::Path, t: std::time::SystemTime) {
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .unwrap()
+        .set_modified(t)
+        .unwrap();
+}
