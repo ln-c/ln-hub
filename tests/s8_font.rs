@@ -10,7 +10,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use common::*;
-use ln_hub::{App, Config};
+use ln_hub::{App, Config, JobState};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -49,6 +49,34 @@ fn app_with_env(name: &str, env_lua: Option<&str>, sys: &FakeSystem) -> (App, Pa
     press(&mut app, 'l');
     (app, dir)
 }
+
+/// Like `app_with_env` but also returns the env file path (so a test can rewrite it) and can leave
+/// the module column focused (`focus_items == false`: `l` is not pressed).
+fn app_with_env_path(
+    name: &str,
+    env_lua: &str,
+    focus_items: bool,
+    sys: &FakeSystem,
+) -> (App, PathBuf, PathBuf) {
+    let home = tempdir(&format!("{name}-home"));
+    let dir = tempdir(&format!("{name}-wall"));
+    for n in ["img1.png", "img2.png"] {
+        fs::write(dir.join(n), b"x").unwrap();
+    }
+    let env_file = tempdir(&format!("{name}-hypr")).join("env.lua");
+    fs::write(&env_file, env_lua).unwrap();
+    let mut cfg = Config::default_for(&home);
+    cfg.wallpaper_dir = dir.clone();
+    cfg.hypr_env_file = env_file.clone();
+    let mut app = App::new(cfg, Box::new(sys.clone()));
+    if focus_items {
+        press(&mut app, 'l');
+    }
+    (app, dir, env_file)
+}
+
+const OLD_ENV: &str = "hl.env(\"FONT_NAME\", \"Old Mono\")\nhl.env(\"FONT_SIZE\", \"13\")\n";
+const NEW_ENV: &str = "hl.env(\"FONT_NAME\", \"Fira Code\")\nhl.env(\"FONT_SIZE\", \"21\")\n";
 
 fn app(name: &str, sys: &FakeSystem) -> (App, PathBuf) {
     app_with_env(name, None, sys)
@@ -248,4 +276,202 @@ fn esc_closes_the_prompt_without_spawning() {
         vec![call(&["-w", &format!("{}/img2.png", dir.display())])]
     );
     assert!(!shows(&mut a, SIZE_ERR));
+}
+
+#[test]
+fn done_font_job_reloads_the_display_from_env_file() {
+    // Catches: tick not re-reading env.lua after a Done font job (display stays on the old font).
+    // The typed name (`Zed`) differs from the env values so the status text cannot fake a pass.
+    let sys = FakeSystem::new();
+    let (mut a, _dir, env) = app_with_env_path("s8-reload", OLD_ENV, true, &sys);
+    assert_shows(&mut a, "Old Mono");
+    sys.set_job_state(JobState::Running);
+    press(&mut a, 'f');
+    type_text(&mut a, "Zed");
+    enter(&mut a);
+    fs::write(&env, NEW_ENV).unwrap();
+    sys.set_job_state(JobState::Done);
+    a.tick();
+    assert_shows(&mut a, "Fira Code");
+    assert_number(&mut a, "21");
+    assert_lacks(&mut a, "Old Mono");
+    assert_no_number(&mut a, "13");
+}
+
+#[test]
+fn failed_font_job_keeps_the_old_display() {
+    // Catches: tick re-reading env.lua after a Failed job (shows a font that was not applied).
+    let sys = FakeSystem::new();
+    let (mut a, _dir, env) = app_with_env_path("s8-failed", OLD_ENV, true, &sys);
+    sys.set_job_state(JobState::Running);
+    press(&mut a, 'f');
+    type_text(&mut a, "Zed");
+    enter(&mut a);
+    fs::write(&env, NEW_ENV).unwrap();
+    sys.set_job_state(JobState::Failed("exit 1".to_string()));
+    a.tick();
+    assert_shows(&mut a, "Old Mono");
+    assert_number(&mut a, "13");
+    assert_lacks(&mut a, "Fira Code");
+    assert_no_number(&mut a, "21");
+}
+
+#[test]
+fn quit_key_typed_into_a_prompt_is_text_not_quit() {
+    // Catches: the quit arm running before the prompt check (typing `q` in a font name quits).
+    for text in ["q", "aq"] {
+        let sys = FakeSystem::new();
+        let (mut a, _dir) = app(&format!("s8-quit-{text}"), &sys);
+        press(&mut a, 'f');
+        type_text(&mut a, text);
+        assert!(!a.should_quit(), "`{text}` typed in a prompt must not quit");
+        enter(&mut a);
+        assert_eq!(sys.spawn_calls(), vec![call(&["-f", text])]);
+        assert!(!a.should_quit());
+    }
+}
+
+#[test]
+fn f_and_s_do_nothing_while_the_module_column_is_focused() {
+    // Catches: `f` / `s` opening a prompt without the items column focused (guard dropped).
+    let sys = FakeSystem::new();
+    let (mut a, _dir, _env) = app_with_env_path("s8-unfocused", OLD_ENV, false, &sys);
+    press(&mut a, 'f');
+    assert_lacks(&mut a, "Font name:");
+    type_text(&mut a, "Zed");
+    enter(&mut a);
+    press(&mut a, 's');
+    assert_lacks(&mut a, "Font size:");
+    type_text(&mut a, "18");
+    enter(&mut a);
+    assert!(
+        sys.spawn_calls().is_empty(),
+        "no font spawn expected: {:?}",
+        sys.spawn_calls()
+    );
+    assert_lacks(&mut a, "Zed");
+}
+
+#[test]
+fn prompt_submit_waits_while_a_job_is_in_flight() {
+    // Catches: submit_prompt spawning a second ln-themectl while one is running (no in-flight
+    // guard), or dropping the typed text instead of keeping the prompt open.
+    let sys = FakeSystem::new();
+    let (mut a, dir) = app("s8-inflight", &sys);
+    sys.set_job_state(JobState::Running);
+    enter(&mut a); // applies img1.png
+    let wall = call(&["-w", &format!("{}/img1.png", dir.display())]);
+    assert_eq!(sys.spawn_calls(), vec![wall.clone()]);
+    a.tick();
+    press(&mut a, 'f');
+    type_text(&mut a, "Zed");
+    enter(&mut a);
+    assert_eq!(sys.spawn_calls(), vec![wall.clone()], "no second spawn");
+    assert_shows(&mut a, "Zed");
+    sys.set_job_state(JobState::Done);
+    a.tick();
+    enter(&mut a);
+    assert_eq!(sys.spawn_calls(), vec![wall, call(&["-f", "Zed"])]);
+}
+
+#[test]
+fn backspace_removes_the_last_typed_character() {
+    // Catches: Backspace ignored in a prompt (`189` would be rejected as out of range).
+    let sys = FakeSystem::new();
+    let (mut a, _dir) = app("s8-bksp", &sys);
+    press(&mut a, 's');
+    type_text(&mut a, "189");
+    a.handle_key(key(KeyCode::Backspace));
+    enter(&mut a);
+    assert_eq!(sys.spawn_calls(), vec![call(&["-s", "18"])]);
+}
+
+#[test]
+fn empty_font_name_does_not_spawn() {
+    // Catches: spawning `ln-themectl -f ""` for an empty or whitespace-only name.
+    for text in ["", "   "] {
+        let sys = FakeSystem::new();
+        let (mut a, _dir) = app("s8-empty", &sys);
+        press(&mut a, 'f');
+        type_text(&mut a, text);
+        enter(&mut a);
+        assert!(
+            sys.spawn_calls().is_empty(),
+            "`{text}` must not spawn: {:?}",
+            sys.spawn_calls()
+        );
+    }
+}
+
+#[test]
+fn font_name_is_trimmed_before_spawning() {
+    // Catches: passing the raw prompt text (leading/trailing spaces) as the font name.
+    let sys = FakeSystem::new();
+    let (mut a, _dir) = app("s8-trim-name", &sys);
+    press(&mut a, 'f');
+    type_text(&mut a, "  Zed  ");
+    enter(&mut a);
+    assert_eq!(sys.spawn_calls(), vec![call(&["-f", "Zed"])]);
+}
+
+#[test]
+fn font_size_is_trimmed_before_parsing() {
+    // Catches: parsing the untrimmed size text (` 18 ` rejected as non-numeric).
+    let sys = FakeSystem::new();
+    let (mut a, _dir) = app("s8-trim-size", &sys);
+    press(&mut a, 's');
+    type_text(&mut a, " 18 ");
+    enter(&mut a);
+    assert_eq!(sys.spawn_calls(), vec![call(&["-s", "18"])]);
+}
+
+#[test]
+fn prompts_are_labelled() {
+    // Catches: a prompt that echoes only the typed text, with no `Font name:` / `Font size:` label.
+    let sys = FakeSystem::new();
+    let (mut a, _dir) = app("s8-labels", &sys);
+    press(&mut a, 'f');
+    assert_shows(&mut a, "Font name:");
+    a.handle_key(key(KeyCode::Esc));
+    press(&mut a, 's');
+    assert_shows(&mut a, "Font size:");
+    assert_lacks(&mut a, "Font name:");
+}
+
+#[test]
+fn font_job_statuses_show_applying_then_applied() {
+    // Catches: no status feedback for font jobs (or the wrong label/ellipsis) while applying and
+    // after the job finishes.
+    let sys = FakeSystem::new();
+    let (mut a, _dir) = app("s8-status", &sys);
+    sys.set_job_state(JobState::Running);
+    press(&mut a, 's');
+    type_text(&mut a, "18");
+    enter(&mut a);
+    assert_shows(&mut a, "Applying font size 18\u{2026}");
+    sys.set_job_state(JobState::Done);
+    a.tick();
+    assert_shows(&mut a, "Applied font size 18");
+    assert_lacks(&mut a, "Applying");
+
+    sys.set_job_state(JobState::Running);
+    press(&mut a, 'f');
+    type_text(&mut a, "Zed");
+    enter(&mut a);
+    assert_shows(&mut a, "Applying font name Zed\u{2026}");
+    sys.set_job_state(JobState::Done);
+    a.tick();
+    assert_shows(&mut a, "Applied font name Zed");
+    assert_lacks(&mut a, "Applying");
+}
+
+#[test]
+fn font_line_is_hidden_while_the_module_column_is_focused() {
+    // Catches: drawing the font line regardless of focus (it belongs to the Theme items view).
+    let sys = FakeSystem::new();
+    let (mut a, _dir, _env) = app_with_env_path("s8-hidden", OLD_ENV, false, &sys);
+    assert_lacks(&mut a, "Old Mono");
+    assert_no_number(&mut a, "13");
+    press(&mut a, 'l');
+    assert_shows(&mut a, "Old Mono");
 }
