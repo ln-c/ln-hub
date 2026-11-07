@@ -1,19 +1,34 @@
+mod image_view;
+
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Duration;
 
+use image_view::ImageView;
 use ln_hub::{App, Config, ProcSystem};
 use ratatui::DefaultTerminal;
 use ratatui::crossterm::event::{self, Event, KeyEventKind};
 
 fn run(terminal: &mut DefaultTerminal, app: &mut App) -> io::Result<()> {
+    // The first frame is drawn before any image work (picker query, worker thread) happens.
+    terminal.draw(|f| app.render(f))?;
+    let mut images = ImageView::new();
     while !app.should_quit() {
-        terminal.draw(|f| app.render(f))?;
-        if let Event::Key(key) = event::read()?
+        images.poll();
+        terminal.draw(|f| {
+            app.render(f);
+            if let Some(preview) = app.preview_image() {
+                images.render(f, &preview);
+            }
+        })?;
+        if event::poll(Duration::from_millis(100))?
+            && let Event::Key(key) = event::read()?
             && key.kind == KeyEventKind::Press
         {
             app.handle_key(key);
         }
+        app.tick();
     }
     Ok(())
 }
