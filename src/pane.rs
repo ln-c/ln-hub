@@ -9,24 +9,43 @@ pub(crate) enum Action {
     Quit,
     Down,
     Up,
+    Left,
     Right,
     Apply,
     FontName,
     FontSize,
 }
 
+/// The built-in character keys. `quit` may not take any of these (nor [`FILTER_KEY`]).
+const CHAR_KEYS: [(char, Action); 6] = [
+    ('j', Action::Down),
+    ('k', Action::Up),
+    ('h', Action::Left),
+    ('l', Action::Right),
+    ('f', Action::FontName),
+    ('s', Action::FontSize),
+];
+
+/// Reserved for the items filter, which is not bound yet.
+const FILTER_KEY: char = '/';
+
 impl Action {
     pub(crate) fn from_key(code: KeyCode, quit_key: char) -> Option<Action> {
         match code {
             KeyCode::Char(c) if c == quit_key => Some(Action::Quit),
-            KeyCode::Char('j') => Some(Action::Down),
-            KeyCode::Char('k') => Some(Action::Up),
-            KeyCode::Char('l') => Some(Action::Right),
-            KeyCode::Char('f') => Some(Action::FontName),
-            KeyCode::Char('s') => Some(Action::FontSize),
+            KeyCode::Char(c) => CHAR_KEYS.iter().find(|(k, _)| *k == c).map(|(_, a)| *a),
+            KeyCode::Down => Some(Action::Down),
+            KeyCode::Up => Some(Action::Up),
+            KeyCode::Left => Some(Action::Left),
+            KeyCode::Right => Some(Action::Right),
             KeyCode::Enter => Some(Action::Apply),
             _ => None,
         }
+    }
+
+    /// Whether `key` is already bound (or reserved) and so cannot be the quit key.
+    pub(crate) fn is_built_in_key(key: char) -> bool {
+        key == FILTER_KEY || CHAR_KEYS.iter().any(|(k, _)| *k == key)
     }
 }
 

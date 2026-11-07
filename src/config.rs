@@ -3,6 +3,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::pane::Action;
+
 /// A module shown in the module column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Module {
@@ -44,6 +46,8 @@ pub enum ConfigError {
     DuplicateModule(Box<str>),
     /// A `[keymap]` value is not a single character.
     InvalidKey(String),
+    /// A `[keymap]` value is already bound to a built-in key.
+    KeyConflict { action: &'static str, key: char },
     /// The TOML text could not be parsed or has values of the wrong type.
     Parse(String),
 }
@@ -56,6 +60,9 @@ impl fmt::Display for ConfigError {
             ConfigError::DuplicateModule(name) => write!(f, "duplicate module: {name}"),
             ConfigError::InvalidKey(key) => {
                 write!(f, "invalid key: {key:?} (expected one character)")
+            }
+            ConfigError::KeyConflict { action, key } => {
+                write!(f, "key conflict: {action} = \"{key}\" is already bound")
             }
             ConfigError::Parse(msg) => write!(f, "invalid config: {msg}"),
         }
@@ -139,7 +146,14 @@ impl Config {
             cfg.modules = modules;
         }
         if let Some(quit) = raw.keymap.and_then(|k| k.quit) {
-            cfg.keymap.quit = single_char(&quit)?;
+            let key = single_char(&quit)?;
+            if Action::is_built_in_key(key) {
+                return Err(ConfigError::KeyConflict {
+                    action: "quit",
+                    key,
+                });
+            }
+            cfg.keymap.quit = key;
         }
         Ok(cfg)
     }

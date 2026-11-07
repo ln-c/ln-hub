@@ -89,10 +89,16 @@ impl App {
                 self.focus_items();
                 None
             }
+            (Some(_), Action::Left) => {
+                self.items_focused = false;
+                None
+            }
             (None, Action::Down) => {
-                if self.selected + 1 < self.modules.len() {
-                    self.selected += 1;
-                }
+                self.selected = (self.selected + 1).min(self.modules.len() - 1);
+                None
+            }
+            (None, Action::Up) => {
+                self.selected = self.selected.saturating_sub(1);
                 None
             }
             (Some(_), Action::Apply) if self.job.is_some() => None,
