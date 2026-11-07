@@ -44,6 +44,19 @@ impl ThemePane {
         }
     }
 
+    /// The wallpaper under the cursor; `None` when the list is empty.
+    pub(crate) fn selected(&self) -> Option<&Wallpaper> {
+        self.wallpapers.get(self.cursor)
+    }
+
+    /// Moves the cursor by `delta` rows, clamped to the first and last wallpaper.
+    pub(crate) fn move_cursor(&mut self, delta: isize) {
+        let Some(last) = self.wallpapers.len().checked_sub(1) else {
+            return;
+        };
+        self.cursor = self.cursor.saturating_add_signed(delta).min(last);
+    }
+
     /// Draws the pane inside `block`, which the caller has already styled for focus.
     pub(crate) fn render(&self, f: &mut Frame, area: Rect, block: Block) {
         if self.wallpapers.is_empty() {
