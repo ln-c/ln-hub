@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::font::Font;
-use crate::style::HIGHLIGHT;
 use crate::wallpaper::{self, Kind, Wallpaper};
 
 /// Row prefix for the applied wallpaper.
@@ -128,12 +128,18 @@ impl ThemePane {
     }
 
     /// Draws the wallpaper list and the details of the wallpaper under the cursor.
-    pub(crate) fn render(&self, f: &mut Frame, items_area: Rect, preview_area: Rect) {
-        self.render_items(f, items_area);
+    pub(crate) fn render(
+        &self,
+        f: &mut Frame,
+        items_area: Rect,
+        preview_area: Rect,
+        highlight: Style,
+    ) {
+        self.render_items(f, items_area, highlight);
         self.render_preview(f, preview_area);
     }
 
-    fn render_items(&self, f: &mut Frame, area: Rect) {
+    fn render_items(&self, f: &mut Frame, area: Rect, highlight: Style) {
         let block = Block::bordered().title("Items");
         if self.wallpapers.is_empty() {
             let msg = format!("No wallpapers in {}", self.wallpaper_dir.display());
@@ -152,7 +158,7 @@ impl ThemePane {
                 ListItem::new(format!("{mark}{}", w.name))
             })
             .collect();
-        let list = List::new(rows).block(block).highlight_style(HIGHLIGHT);
+        let list = List::new(rows).block(block).highlight_style(highlight);
         let mut state = ListState::default().with_selected(Some(self.cursor));
         f.render_stateful_widget(list, area, &mut state);
     }

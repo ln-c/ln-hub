@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use crate::config::{Config, Module};
 use crate::font;
 use crate::monitor::{MonitorsPane, Toggle};
-use crate::style::HIGHLIGHT;
+use crate::style::LiveHighlight;
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
 
@@ -62,6 +62,7 @@ pub struct App {
     theme: ThemePane,
     monitors: MonitorsPane,
     sys: Box<dyn System>,
+    highlight: LiveHighlight,
     items_focused: bool,
     selected: usize,
     job: Option<Job>,
@@ -82,6 +83,7 @@ impl App {
             ),
             monitors: MonitorsPane::new(),
             sys,
+            highlight: LiveHighlight::load(cfg.colors_file),
             items_focused: false,
             selected: 0,
             job: None,
@@ -126,6 +128,7 @@ impl App {
 
     /// Polls the in-flight job; once it has finished, reports the outcome and releases the job.
     pub fn tick(&mut self) {
+        self.highlight.reload_if_changed();
         let Some(job) = self.job.take() else {
             return;
         };
@@ -143,6 +146,7 @@ impl App {
     }
 
     pub fn render(&mut self, f: &mut Frame) {
+        let highlight = self.highlight.style();
         let theme_active = self.focused_module() == Some(Module::Theme);
         let [main_area, status_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(f.area());
@@ -160,13 +164,13 @@ impl App {
             .collect();
         let list = List::new(items)
             .block(Block::bordered().title("Modules"))
-            .highlight_style(HIGHLIGHT);
+            .highlight_style(highlight);
         let mut state = ListState::default().with_selected(Some(self.selected));
         f.render_stateful_widget(list, modules_area, &mut state);
 
         match self.focused_module() {
-            Some(Module::Theme) => self.theme.render(f, items_area, preview_area),
-            Some(Module::Monitors) => self.monitors.render(f, items_area, preview_area),
+            Some(Module::Theme) => self.theme.render(f, items_area, preview_area, highlight),
+            Some(Module::Monitors) => self.monitors.render(f, items_area, preview_area, highlight),
             None => {
                 f.render_widget(Block::bordered().title("Items"), items_area);
                 f.render_widget(Block::bordered().title("Preview"), preview_area);
