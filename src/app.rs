@@ -11,7 +11,7 @@ use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
 use crate::pane::{Action, PaneAction, Program, TOP_PREFIX};
 use crate::system::{JobId, JobState, System};
-use crate::theme_pane::ThemePane;
+use crate::theme_pane::{PreviewImage, ThemePane};
 
 /// The program that applies wallpapers and fonts.
 const THEMECTL: &str = "ln-themectl";
@@ -48,6 +48,8 @@ pub struct App {
     status: Option<String>,
     /// A `g` was pressed; the next key completes or cancels `gg`.
     top_pending: bool,
+    /// The image offered by the last `render`.
+    preview_image: Option<PreviewImage>,
     quit: bool,
 }
 
@@ -69,6 +71,7 @@ impl App {
             job: None,
             status: None,
             top_pending: false,
+            preview_image: None,
             quit: false,
         }
     }
@@ -168,6 +171,11 @@ impl App {
         }
     }
 
+    /// The image to draw over the Preview block, as of the last `render`.
+    pub fn preview_image(&self) -> Option<PreviewImage> {
+        self.preview_image.clone()
+    }
+
     pub fn render(&mut self, f: &mut Frame) {
         let highlight = self.palette.highlight();
         let theme_active = self.focused_module() == Some(Module::Theme);
@@ -191,14 +199,18 @@ impl App {
         let mut state = ListState::default().with_selected(Some(self.selected));
         f.render_stateful_widget(list, modules_area, &mut state);
 
-        match self.focused_module() {
+        self.preview_image = match self.focused_module() {
             Some(Module::Theme) => self.theme.render(f, items_area, preview_area, highlight),
-            Some(Module::Monitors) => self.monitors.render(f, items_area, preview_area, highlight),
+            Some(Module::Monitors) => {
+                self.monitors.render(f, items_area, preview_area, highlight);
+                None
+            }
             None => {
                 f.render_widget(Block::bordered().title("Items"), items_area);
                 f.render_widget(Block::bordered().title("Preview"), preview_area);
+                None
             }
-        }
+        };
 
         self.render_status(f, status_area, theme_active);
     }

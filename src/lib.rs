@@ -16,3 +16,4 @@ pub use config::{Config, ConfigError, Module};
 pub use palette::{Palette, PaletteError};
 pub use proc::ProcSystem;
 pub use system::{JobId, JobState, System};
+pub use theme_pane::PreviewImage;
