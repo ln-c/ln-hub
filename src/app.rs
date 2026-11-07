@@ -1,3 +1,5 @@
+use std::io::ErrorKind;
+
 use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -6,7 +8,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::config::{Config, Module};
 use crate::font;
-use crate::monitor::MonitorsPane;
+use crate::monitor::{MonitorsPane, Toggle};
 use crate::style::HIGHLIGHT;
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
@@ -14,11 +16,21 @@ use crate::theme_pane::ThemePane;
 /// The program that applies wallpapers and fonts.
 const THEMECTL: &str = "ln-themectl";
 
-/// An `ln-themectl` job that has been spawned and not yet observed as finished.
+/// The program that enables and disables monitors.
+const MONITORCTL: &str = "ln-monitorctl";
+
+/// What to refresh once a job has finished.
+enum OnDone {
+    ReloadTheme,
+    ReloadMonitors,
+}
+
+/// A job that has been spawned and not yet observed as finished.
 struct Apply {
     job: JobId,
-    /// What the job changes, as shown in the status bar: `img2.png`, `font name X`.
+    /// What the job changes, as shown in the status bar: `img2.png`, `font name X`, `DP-1 off`.
     name: String,
+    on_done: OnDone,
 }
 
 /// A text prompt open in the status row; typed characters go to it until Enter or Esc.
@@ -84,16 +96,24 @@ impl App {
             self.handle_prompt_key(key.code);
             return;
         }
-        let in_items = self.items_focused && self.theme_focused();
+        let focused = self.focused_module();
+        let in_theme = focused == Some(Module::Theme);
         match key.code {
             KeyCode::Char(c) if c == self.quit_key => self.quit = true,
-            KeyCode::Char('j') if in_items => self.theme.move_cursor(1),
-            KeyCode::Char('k') if in_items => self.theme.move_cursor(-1),
+            KeyCode::Char('j') if in_theme => self.theme.move_cursor(1),
+            KeyCode::Char('k') if in_theme => self.theme.move_cursor(-1),
+            KeyCode::Char('j') if focused == Some(Module::Monitors) => self.monitors.move_cursor(1),
+            KeyCode::Char('k') if focused == Some(Module::Monitors) => {
+                self.monitors.move_cursor(-1);
+            }
             KeyCode::Char('j') if self.selected + 1 < self.modules.len() => self.selected += 1,
             KeyCode::Char('l') => self.focus_items(),
-            KeyCode::Char('f') if in_items => self.prompt = Some(Prompt::FontName(String::new())),
-            KeyCode::Char('s') if in_items => self.prompt = Some(Prompt::FontSize(String::new())),
-            KeyCode::Enter if in_items && self.apply.is_none() => self.apply_selected(),
+            KeyCode::Char('f') if in_theme => self.prompt = Some(Prompt::FontName(String::new())),
+            KeyCode::Char('s') if in_theme => self.prompt = Some(Prompt::FontSize(String::new())),
+            KeyCode::Enter if in_theme && self.apply.is_none() => self.apply_selected(),
+            KeyCode::Enter if focused == Some(Module::Monitors) && self.apply.is_none() => {
+                self.toggle_selected_monitor();
+            }
             _ => {}
         }
     }
@@ -110,7 +130,10 @@ impl App {
         match self.sys.poll(apply.job) {
             JobState::Running => self.apply = Some(apply),
             JobState::Done => {
-                self.theme.reload();
+                match apply.on_done {
+                    OnDone::ReloadTheme => self.theme.reload(),
+                    OnDone::ReloadMonitors => self.monitors.load(self.sys.as_ref()),
+                }
                 self.status = Some(format!("Applied {}", apply.name));
             }
             JobState::Failed(reason) => self.status = Some(format!("Apply failed: {reason}")),
@@ -118,7 +141,7 @@ impl App {
     }
 
     pub fn render(&mut self, f: &mut Frame) {
-        let theme_active = self.items_focused && self.theme_focused();
+        let theme_active = self.focused_module() == Some(Module::Theme);
         let [main_area, status_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(f.area());
         let [modules_area, items_area, preview_area] = Layout::horizontal([
@@ -186,11 +209,6 @@ impl App {
         }
     }
 
-    /// Whether the module column is on the Theme module.
-    fn theme_focused(&self) -> bool {
-        self.modules.get(self.selected) == Some(&Module::Theme)
-    }
-
     /// Keys while a prompt is open. Every printable character, including the quit key, is text.
     fn handle_prompt_key(&mut self, code: KeyCode) {
         let Some(prompt) = self.prompt.as_mut() else {
@@ -233,15 +251,23 @@ impl App {
         }
     }
 
-    /// Spawns `ln-themectl` with `args` as the in-flight job, labelled `name` in the status bar.
-    fn spawn_themectl(&mut self, args: &[&str], name: String) {
-        match self.sys.spawn(THEMECTL, args) {
+    /// Spawns `prog` with `args` as the in-flight job, labelled `name` in the status bar.
+    fn spawn_job(&mut self, prog: &str, args: &[&str], name: String, on_done: OnDone) {
+        match self.sys.spawn(prog, args) {
             Ok(job) => {
                 self.status = Some(format!("Applying {name}…"));
-                self.apply = Some(Apply { job, name });
+                self.apply = Some(Apply { job, name, on_done });
             }
-            Err(e) => self.status = Some(format!("{THEMECTL} not found: {e}")),
+            Err(e) if e.kind() == ErrorKind::NotFound => {
+                self.status = Some(format!("{prog} not found: {e}"));
+            }
+            Err(e) => self.status = Some(format!("Failed to start {prog}: {e}")),
         }
+    }
+
+    /// Spawns `ln-themectl` with `args` as the in-flight job, labelled `name` in the status bar.
+    fn spawn_themectl(&mut self, args: &[&str], name: String) {
+        self.spawn_job(THEMECTL, args, name, OnDone::ReloadTheme);
     }
 
     /// Spawns `ln-themectl -w <path>` for the wallpaper under the cursor.
@@ -252,5 +278,22 @@ impl App {
         let name = w.name.clone();
         let path = w.path.to_string_lossy().into_owned();
         self.spawn_themectl(&["-w", path.as_str()], name);
+    }
+
+    /// Toggles the monitor under the cursor through `ln-monitorctl`, unless it is the last
+    /// enabled one.
+    fn toggle_selected_monitor(&mut self) {
+        match self.monitors.toggle() {
+            Some(Toggle::Run { name, action }) => self.spawn_job(
+                MONITORCTL,
+                &[name.as_str(), action],
+                format!("{name} {action}"),
+                OnDone::ReloadMonitors,
+            ),
+            Some(Toggle::Refused) => {
+                self.status = Some("Refusing to disable the last enabled monitor".to_owned());
+            }
+            None => {}
+        }
     }
 }
