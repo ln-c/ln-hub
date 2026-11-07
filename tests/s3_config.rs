@@ -6,15 +6,11 @@ mod common;
 
 use common::*;
 use ln_hub::{App, Config, ConfigError, Module};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 use std::path::{Path, PathBuf};
 
-const W: u16 = 80;
-const H: u16 = 24;
-const LEFT_COL_MAX_X: u16 = W / 3;
+const LEFT_COL_MAX_X: u16 = DRAW_W / 3;
 
 fn home() -> PathBuf {
     PathBuf::from("/h")
@@ -29,12 +25,6 @@ fn parse(toml: &str) -> Config {
 
 fn app_from(toml: &str) -> App {
     App::new(parse(toml), Box::new(FakeSystem::new()))
-}
-
-fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
 }
 
 fn left_rows(buf: &Buffer, label: &str) -> Vec<u16> {

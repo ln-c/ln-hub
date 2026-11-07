@@ -9,6 +9,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use ln_hub::{App, Config, JobId, JobState, Module, System};
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::{Color, Modifier};
@@ -181,8 +183,24 @@ pub fn tempdir(name: &str) -> PathBuf {
     dir
 }
 
+/// Default terminal size (columns x rows) for `draw`.
+pub const DRAW_W: u16 = 80;
+pub const DRAW_H: u16 = 24;
+
+/// Renders `app` once at `w` x `h` and returns the buffer.
+pub fn draw_sized(app: &mut App, w: u16, h: u16) -> Buffer {
+    let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
+    term.draw(|f| app.render(f)).unwrap();
+    term.backend().buffer().clone()
+}
+
+/// Renders `app` once at the default 80x24 and returns the buffer.
+pub fn draw(app: &mut App) -> Buffer {
+    draw_sized(app, DRAW_W, DRAW_H)
+}
+
 /// Rendered style of one cell: (fg, bg, modifier).
-pub type Style = (Color, Color, Modifier);
+pub type CellStyle = (Color, Color, Modifier);
 
 pub fn press(app: &mut App, c: char) {
     app.handle_key(key(KeyCode::Char(c)));
@@ -197,7 +215,8 @@ pub fn dump(buf: &Buffer) -> String {
     buffer_lines(buf).join("\n")
 }
 
-/// Hits of `text` whose first cell lies in the items column x-range `[x_start, x_end)`.
+/// Hits of `text` whose FIRST cell lies in the items column x-range `[x_start, x_end)`; the text
+/// may spill past `x_end`. Use `items_hit_within` when the hit must be fully inside the column.
 pub fn items_hits(buf: &Buffer, text: &str, x_start: u16, x_end: u16) -> Vec<(u16, u16)> {
     find_text(buf, text)
         .into_iter()
@@ -205,7 +224,8 @@ pub fn items_hits(buf: &Buffer, text: &str, x_start: u16, x_end: u16) -> Vec<(u1
         .collect()
 }
 
-/// First hit of `text` lying ENTIRELY inside the items column x-range `[x_start, x_end)`.
+/// First hit of `text` lying ENTIRELY inside the items column x-range `[x_start, x_end)` (stricter
+/// than `items_hits`, which only requires the hit to start in the column).
 pub fn items_hit_within(buf: &Buffer, text: &str, x_start: u16, x_end: u16) -> Option<(u16, u16)> {
     let len = text.chars().count() as u16;
     find_text(buf, text)
@@ -231,13 +251,13 @@ pub fn row_of(buf: &Buffer, name: &str, x_start: u16, x_end: u16) -> u16 {
     name_cell(buf, name, x_start, x_end).1
 }
 
-pub fn cell_style(buf: &Buffer, (x, y): (u16, u16)) -> Style {
+pub fn cell_style(buf: &Buffer, (x, y): (u16, u16)) -> CellStyle {
     let c = &buf[(x, y)];
     (c.fg, c.bg, c.modifier)
 }
 
 /// Style of the first letter of `name` (see `name_cell`).
-pub fn name_style(buf: &Buffer, name: &str, x_start: u16, x_end: u16) -> Style {
+pub fn name_style(buf: &Buffer, name: &str, x_start: u16, x_end: u16) -> CellStyle {
     cell_style(buf, name_cell(buf, name, x_start, x_end))
 }
 
@@ -249,7 +269,7 @@ pub fn assert_only_highlighted(
     expected: &str,
     locate: impl Fn(&Buffer, &str) -> Option<(u16, u16)>,
 ) {
-    let styles: Vec<(&str, Style)> = rows
+    let styles: Vec<(&str, CellStyle)> = rows
         .iter()
         .map(|r| {
             let pos = locate(buf, r)
@@ -257,16 +277,23 @@ pub fn assert_only_highlighted(
             (*r, cell_style(buf, pos))
         })
         .collect();
-    let others: Vec<&(&str, Style)> = styles.iter().filter(|(r, _)| *r != expected).collect();
+    let others: Vec<&(&str, CellStyle)> = styles.iter().filter(|(r, _)| *r != expected).collect();
     let hl = styles.iter().find(|(r, _)| *r == expected).unwrap().1;
     assert!(
         others.iter().all(|(_, s)| *s == others[0].1),
         "non-highlighted rows must share one style, got {styles:?}; buffer:\n{}",
         dump(buf)
     );
+    // With no other rows to compare against, "highlighted" means the row carries some style
+    // beyond the unstyled default.
+    let baseline: CellStyle =
+        others
+            .first()
+            .map(|(_, s)| *s)
+            .unwrap_or((Color::Reset, Color::Reset, Modifier::empty()));
     assert_ne!(
         hl,
-        others[0].1,
+        baseline,
         "`{expected}` must be the highlighted row (style must differ from the others), got {styles:?}; buffer:\n{}",
         dump(buf)
     );
@@ -279,6 +306,12 @@ pub fn assert_status(buf: &Buffer, text: &str) {
         "status `{text}` not found anywhere; buffer:\n{}",
         dump(buf)
     );
+}
+
+/// Renders `app` at the default 80x24 and asserts some rendered row contains `text`
+/// (see `assert_status`).
+pub fn assert_app_status(app: &mut App, text: &str) {
+    assert_status(&draw(app), text);
 }
 
 /// Number of `hyprctl` invocations recorded by `run`.

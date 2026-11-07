@@ -13,25 +13,15 @@ mod common;
 
 use common::*;
 use ln_hub::{App, Config};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::style::{Color, Modifier};
 
-const W: u16 = 80;
-const H: u16 = 24;
-const LEFT_COL_MAX_X: u16 = W / 3; // leftmost column = x < 26
+const LEFT_COL_MAX_X: u16 = DRAW_W / 3; // leftmost column = x < 26
 
 fn new_app(name: &str) -> App {
     let tmp = tempdir(name);
     App::new(Config::default_for(&tmp), Box::new(FakeSystem::new()))
-}
-
-fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
 }
 
 /// Position of `label` in the leftmost column, panicking with the dump if absent.
@@ -47,14 +37,14 @@ fn left_pos(buf: &Buffer, label: &str) -> (u16, u16) {
         })
 }
 
-type Style = (Color, Color, Modifier);
+type CellStyle = (Color, Color, Modifier);
 
-fn style_at(buf: &Buffer, (x, y): (u16, u16)) -> Style {
+fn style_at(buf: &Buffer, (x, y): (u16, u16)) -> CellStyle {
     let c = &buf[(x, y)];
     (c.fg, c.bg, c.modifier)
 }
 
-fn module_styles(buf: &Buffer) -> (Style, Style) {
+fn module_styles(buf: &Buffer) -> (CellStyle, CellStyle) {
     (
         style_at(buf, left_pos(buf, "Theme")),
         style_at(buf, left_pos(buf, "Monitors")),

@@ -6,6 +6,7 @@ use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use serde::Deserialize;
 
+use crate::pane::{Action, Cursor, PaneAction, Program};
 use crate::system::System;
 
 /// Shown in the items column when `hyprctl` fails or prints something unreadable.
@@ -41,19 +42,27 @@ fn query(sys: &dyn System) -> Option<Vec<Monitor>> {
     serde_json::from_slice(&out.stdout).ok()
 }
 
-/// What `Enter` on the monitor under the cursor should do.
-pub(crate) enum Toggle {
-    /// Run `ln-monitorctl <name> <action>`.
-    Run { name: String, action: &'static str },
-    /// The monitor is the last enabled one and must stay on.
-    Refused,
+/// The state `ln-monitorctl` puts a monitor in.
+#[derive(Clone, Copy)]
+enum Power {
+    On,
+    Off,
+}
+
+impl Power {
+    fn as_str(self) -> &'static str {
+        match self {
+            Power::On => "on",
+            Power::Off => "off",
+        }
+    }
 }
 
 pub(crate) struct MonitorsPane {
     /// `None` when the last query failed.
     monitors: Option<Vec<Monitor>>,
     /// Index into the monitor list of the highlighted row.
-    cursor: usize,
+    cursor: Cursor,
 }
 
 impl MonitorsPane {
@@ -61,42 +70,52 @@ impl MonitorsPane {
     pub(crate) fn new() -> MonitorsPane {
         MonitorsPane {
             monitors: Some(Vec::new()),
-            cursor: 0,
+            cursor: Cursor::default(),
         }
     }
 
     /// Queries `hyprctl` and replaces the list, keeping the cursor on a valid row.
     pub(crate) fn load(&mut self, sys: &dyn System) {
         self.monitors = query(sys);
-        let len = self.monitors.as_ref().map_or(0, Vec::len);
-        self.cursor = self.cursor.min(len.saturating_sub(1));
+        self.cursor.clamp(self.len());
     }
 
-    /// Moves the cursor by `delta` rows, clamped to the first and last monitor.
-    pub(crate) fn move_cursor(&mut self, delta: isize) {
-        let len = self.monitors.as_ref().map_or(0, Vec::len);
-        self.cursor = self
-            .cursor
-            .saturating_add_signed(delta)
-            .min(len.saturating_sub(1));
+    fn len(&self) -> usize {
+        self.monitors.as_ref().map_or(0, Vec::len)
     }
 
-    /// The toggle for the monitor under the cursor; `None` when there is none.
-    pub(crate) fn toggle(&self) -> Option<Toggle> {
+    /// Handles a key while the Monitors items are focused.
+    pub(crate) fn handle(&mut self, action: Action) -> Option<PaneAction> {
+        match action {
+            Action::Down => self.cursor.move_by(1, self.len()),
+            Action::Up => self.cursor.move_by(-1, self.len()),
+            Action::Apply => return self.toggle(),
+            _ => {}
+        }
+        None
+    }
+
+    /// Nothing to reset when focus leaves the pane.
+    pub(crate) fn unfocus(&mut self) {}
+
+    /// Toggles the monitor under the cursor through `ln-monitorctl`, unless it is the last
+    /// enabled one.
+    fn toggle(&self) -> Option<PaneAction> {
         let monitors = self.monitors.as_ref()?;
-        let m = monitors.get(self.cursor)?;
-        if m.disabled {
-            return Some(Toggle::Run {
-                name: m.name.clone(),
-                action: "on",
-            });
-        }
-        if monitors.iter().filter(|m| !m.disabled).count() <= 1 {
-            return Some(Toggle::Refused);
-        }
-        Some(Toggle::Run {
-            name: m.name.clone(),
-            action: "off",
+        let m = monitors.get(self.cursor.get())?;
+        let power = match m.disabled {
+            true => Power::On,
+            false if monitors.iter().filter(|m| !m.disabled).count() <= 1 => {
+                return Some(PaneAction::Status(
+                    "Refusing to disable the last enabled monitor".to_owned(),
+                ));
+            }
+            false => Power::Off,
+        };
+        Some(PaneAction::Spawn {
+            program: Program::Monitorctl,
+            args: vec![m.name.clone(), power.as_str().to_owned()],
+            name: format!("{} {}", m.name, power.as_str()),
         })
     }
 
@@ -115,7 +134,7 @@ impl MonitorsPane {
                 let list = List::new(rows)
                     .block(items_block)
                     .highlight_style(highlight);
-                let mut state = ListState::default().with_selected(Some(self.cursor));
+                let mut state = ListState::default().with_selected(Some(self.cursor.get()));
                 f.render_stateful_widget(list, items_area, &mut state);
             }
             None => f.render_widget(Paragraph::new(UNAVAILABLE).block(items_block), items_area),

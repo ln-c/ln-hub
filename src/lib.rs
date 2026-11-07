@@ -5,6 +5,7 @@ mod config;
 mod font;
 mod monitor;
 mod palette;
+mod pane;
 mod system;
 mod theme_pane;
 mod wallpaper;

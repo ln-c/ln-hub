@@ -11,8 +11,6 @@ use std::io;
 
 use common::*;
 use ln_hub::{App, JobState};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 
@@ -81,9 +79,7 @@ fn hyprctl_call() -> (String, Vec<String>) {
 }
 
 fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
+    draw_sized(app, W, H)
 }
 
 /// The row `y` where `text` starts inside the items column, if it is drawn there.

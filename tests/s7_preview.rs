@@ -11,13 +11,9 @@ use std::path::Path;
 
 use common::*;
 use ln_hub::{App, Config};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 
-const W: u16 = 80;
-const H: u16 = 24;
 const PREVIEW_X_START: u16 = 40;
 
 fn write_bytes(dir: &Path, name: &str, len: usize) {
@@ -69,12 +65,6 @@ fn assert_preview_row(buf: &Buffer, text: &str) {
         "preview must have a row exactly `{text}`; buffer:\n{}",
         dump(buf)
     );
-}
-
-fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
 }
 
 fn preview_has(buf: &Buffer, text: &str) -> bool {

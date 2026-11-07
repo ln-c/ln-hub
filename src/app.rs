@@ -1,15 +1,15 @@
 use std::io::ErrorKind;
 
 use ratatui::Frame;
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
+use ratatui::crossterm::event::KeyEvent;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::config::{Config, Module};
-use crate::font;
-use crate::monitor::{MonitorsPane, Toggle};
+use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
+use crate::pane::{Action, PaneAction, Program};
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
 
@@ -33,29 +33,8 @@ struct Job {
     on_done: OnDone,
 }
 
-/// A text prompt open in the status row; typed characters go to it until Enter or Esc.
-enum Prompt {
-    FontName(String),
-    FontSize(String),
-}
-
-impl Prompt {
-    fn text_mut(&mut self) -> &mut String {
-        match self {
-            Prompt::FontName(text) | Prompt::FontSize(text) => text,
-        }
-    }
-
-    fn line(&self) -> String {
-        match self {
-            Prompt::FontName(text) => format!("Font name: {text}"),
-            Prompt::FontSize(text) => format!("Font size: {text}"),
-        }
-    }
-}
-
 /// Top-level application state: the module column and its selection, the Theme items pane,
-/// the in-flight job, the open prompt, the status bar message, and the quit flag.
+/// the in-flight job, the status bar message, and the quit flag.
 pub struct App {
     modules: Vec<Module>,
     quit_key: char,
@@ -66,7 +45,6 @@ pub struct App {
     items_focused: bool,
     selected: usize,
     job: Option<Job>,
-    prompt: Option<Prompt>,
     status: Option<String>,
     quit: bool,
 }
@@ -87,39 +65,52 @@ impl App {
             items_focused: false,
             selected: 0,
             job: None,
-            prompt: None,
             status: None,
             quit: false,
         }
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
-        if self.prompt.is_some() {
-            self.handle_prompt_key(key.code);
+        if self.theme.prompt_open() {
+            let idle = self.job.is_none();
+            let pane_action = self.theme.handle_prompt_key(key.code, idle);
+            self.run(pane_action);
             return;
         }
-        let focused = self.focused_module();
-        let in_theme = focused == Some(Module::Theme);
-        let in_monitors = focused == Some(Module::Monitors);
-        let idle = self.job.is_none();
-        match key.code {
-            KeyCode::Char(c) if c == self.quit_key => self.quit = true,
-            KeyCode::Char('j') if in_theme => self.theme.move_cursor(1),
-            KeyCode::Char('k') if in_theme => self.theme.move_cursor(-1),
-            KeyCode::Char('j') if in_monitors => self.monitors.move_cursor(1),
-            KeyCode::Char('k') if in_monitors => {
-                self.monitors.move_cursor(-1);
+        let Some(action) = Action::from_key(key.code, self.quit_key) else {
+            return;
+        };
+        let pane_action = match (self.focused_module(), action) {
+            (_, Action::Quit) => {
+                self.quit = true;
+                None
             }
-            KeyCode::Char('j') if self.selected + 1 < self.modules.len() => self.selected += 1,
-            KeyCode::Char('l') => self.focus_items(),
-            KeyCode::Char('f') if in_theme => self.prompt = Some(Prompt::FontName(String::new())),
-            KeyCode::Char('s') if in_theme => self.prompt = Some(Prompt::FontSize(String::new())),
-            KeyCode::Enter if in_theme && idle => self.apply_selected(),
-            KeyCode::Enter if in_monitors && idle => {
-                self.toggle_selected_monitor();
+            (_, Action::Right) => {
+                self.focus_items();
+                None
             }
-            _ => {}
-        }
+            (Some(module), Action::Left) => {
+                match module {
+                    Module::Theme => self.theme.unfocus(),
+                    Module::Monitors => self.monitors.unfocus(),
+                }
+                self.items_focused = false;
+                None
+            }
+            (None, Action::Down) => {
+                self.selected = (self.selected + 1).min(self.modules.len().saturating_sub(1));
+                None
+            }
+            (None, Action::Up) => {
+                self.selected = self.selected.saturating_sub(1);
+                None
+            }
+            (Some(_), Action::Apply) if self.job.is_some() => None,
+            (Some(Module::Theme), action) => self.theme.handle(action),
+            (Some(Module::Monitors), action) => self.monitors.handle(action),
+            (None, _) => None,
+        };
+        self.run(pane_action);
     }
 
     pub fn should_quit(&self) -> bool {
@@ -191,10 +182,11 @@ impl App {
         let font_width = u16::try_from(Line::from(font_text.as_str()).width()).unwrap_or(u16::MAX);
         let [left_area, font_area] =
             Layout::horizontal([Constraint::Fill(1), Constraint::Length(font_width)]).areas(area);
-        let left = match &self.prompt {
-            Some(prompt) => prompt.line(),
-            None => self.status.clone().unwrap_or_default(),
-        };
+        let left = self
+            .theme
+            .prompt_line()
+            .or_else(|| self.status.clone())
+            .unwrap_or_default();
         f.render_widget(Paragraph::new(left), left_area);
         f.render_widget(Paragraph::new(font_text), font_area);
     }
@@ -215,45 +207,23 @@ impl App {
         }
     }
 
-    /// Keys while a prompt is open. Every printable character, including the quit key, is text.
-    fn handle_prompt_key(&mut self, code: KeyCode) {
-        let Some(prompt) = self.prompt.as_mut() else {
-            return;
-        };
-        match code {
-            KeyCode::Char(c) => prompt.text_mut().push(c),
-            KeyCode::Backspace => {
-                prompt.text_mut().pop();
+    /// Carries out what the focused pane asked for.
+    fn run(&mut self, action: Option<PaneAction>) {
+        match action {
+            Some(PaneAction::Spawn {
+                program,
+                args,
+                name,
+            }) => {
+                let (prog, on_done) = match program {
+                    Program::Themectl => (THEMECTL, OnDone::ReloadTheme),
+                    Program::Monitorctl => (MONITORCTL, OnDone::ReloadMonitors),
+                };
+                let args: Vec<&str> = args.iter().map(String::as_str).collect();
+                self.spawn_job(prog, &args, name, on_done);
             }
-            KeyCode::Esc => self.prompt = None,
-            KeyCode::Enter => self.submit_prompt(),
-            _ => {}
-        }
-    }
-
-    /// Enter in a prompt: closes it and spawns the font change. While another job is in flight,
-    /// the prompt stays open with its text.
-    fn submit_prompt(&mut self) {
-        if self.job.is_some() {
-            return;
-        }
-        let Some(prompt) = self.prompt.take() else {
-            return;
-        };
-        match prompt {
-            Prompt::FontName(text) => {
-                let name = text.trim();
-                if !name.is_empty() {
-                    self.spawn_themectl(&["-f", name], format!("font name {name}"));
-                }
-            }
-            Prompt::FontSize(text) => match font::parse_size(&text) {
-                Some(size) => {
-                    let size = size.to_string();
-                    self.spawn_themectl(&["-s", size.as_str()], format!("font size {size}"));
-                }
-                None => self.status = Some(font::FONT_SIZE_ERROR.to_owned()),
-            },
+            Some(PaneAction::Status(message)) => self.status = Some(message),
+            None => {}
         }
     }
 
@@ -268,38 +238,6 @@ impl App {
                 self.status = Some(format!("{prog} not found: {e}"));
             }
             Err(e) => self.status = Some(format!("Failed to start {prog}: {e}")),
-        }
-    }
-
-    /// Spawns `ln-themectl` with `args` as the in-flight job, labelled `name` in the status bar.
-    fn spawn_themectl(&mut self, args: &[&str], name: String) {
-        self.spawn_job(THEMECTL, args, name, OnDone::ReloadTheme);
-    }
-
-    /// Spawns `ln-themectl -w <path>` for the wallpaper under the cursor.
-    fn apply_selected(&mut self) {
-        let Some(w) = self.theme.selected() else {
-            return;
-        };
-        let name = w.name.clone();
-        let path = w.path.to_string_lossy().into_owned();
-        self.spawn_themectl(&["-w", path.as_str()], name);
-    }
-
-    /// Toggles the monitor under the cursor through `ln-monitorctl`, unless it is the last
-    /// enabled one.
-    fn toggle_selected_monitor(&mut self) {
-        match self.monitors.toggle() {
-            Some(Toggle::Run { name, action }) => self.spawn_job(
-                MONITORCTL,
-                &[name.as_str(), action],
-                format!("{name} {action}"),
-                OnDone::ReloadMonitors,
-            ),
-            Some(Toggle::Refused) => {
-                self.status = Some("Refusing to disable the last enabled monitor".to_owned());
-            }
-            None => {}
         }
     }
 }

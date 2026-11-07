@@ -16,8 +16,6 @@ use std::io::ErrorKind;
 
 use common::*;
 use ln_hub::{App, Config, JobState, Module};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 
 const W: u16 = 120;
@@ -60,16 +58,15 @@ fn sys_with(mons: &[String]) -> FakeSystem {
 }
 
 fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
+    draw_sized(app, W, H)
 }
 
 fn shows(app: &mut App, text: &str) -> bool {
     buffer_lines(&draw(app)).iter().any(|l| l.contains(text))
 }
 
-/// Asserts some rendered row contains `text`.
+/// Asserts some rendered row contains `text`, at this file's wide size (not the shared 80x24
+/// `assert_app_status`).
 fn assert_status(app: &mut App, text: &str) {
     common::assert_status(&draw(app), text);
 }
@@ -81,7 +78,8 @@ fn spawn(prog: &str, args: &[&str]) -> (String, Vec<String>) {
     )
 }
 
-/// First cell of `text` lying entirely inside the items column.
+/// First cell of `text` lying entirely inside the items column (this file's x-range differs from
+/// s11's, so the wrapper stays local).
 fn items_hit(buf: &Buffer, text: &str) -> Option<(u16, u16)> {
     items_hit_within(buf, text, ITEMS_X_START, ITEMS_X_END)
 }
