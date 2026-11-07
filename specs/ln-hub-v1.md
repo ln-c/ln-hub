@@ -277,6 +277,27 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - `Failed("exit 1")`, then `tick()` → the status shows `Apply failed: exit 1`.
   - `spawn` returns an `io::Error` "not found" → the status shows
     `ln-themectl not found: not found`. No panic.
+  - (Review follow-up, S5 carry-over) Job `Done`, then `tick()` → `current_wallpaper` is
+    re-read, so `●` moves to the applied wallpaper and the cursor stays put. `Failed` → no
+    re-read.
+- Review notes carried to later slices:
+  - Keymap slice, before S12: there is no `h`/`k` in the module column and no arrow keys
+    (keymap table, line ~89/97). The S3.1 `Action` keymap and key-conflict deferral is still
+    open. The quit arm matches before everything else, so a typed `q` in the S12 filter would
+    quit. Route keys through `ThemePane::handle_key -> Option<PaneAction>` when items are
+    focused.
+  - Still deferred: the per-`Module` `match` (until a second pane exists).
+  - Spawn errors other than `NotFound` read `ln-themectl not found: …`, which is misleading.
+    Split them (e.g. `Failed to start ln-themectl: …`) behind a RED test.
+  - The status is never cleared, and `Enter` while a job is running is silently ignored.
+  - S9/S10: generalize `Apply` into one running-job → status-message type once a second job
+    kind exists.
+  - Before S7: extract `render_modules` / `render_status` from `App::render`.
+  - S8: make `"ln-themectl"` a const once font apply also uses it.
+  - Paths go to `spawn` via `to_string_lossy` (a limit of the `&[&str]` API).
+  - Tests: move the duplicated highlight helpers (`name_style`, `assert_only_highlighted`,
+    `items_hits`) into `tests/common`. Enter outside items focus and Enter on an empty list
+    are not yet pinned.
 
 ### Slice 7
 - slice_id: S7-preview-meta
