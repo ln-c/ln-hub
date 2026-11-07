@@ -17,12 +17,8 @@ use std::path::{Path, PathBuf};
 
 use common::*;
 use ln_hub::{App, Config, JobState};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 
-const W: u16 = 80;
-const H: u16 = 24;
 const ITEMS_X_START: u16 = 20;
 const ITEMS_X_END: u16 = 40;
 const NAMES: [&str; 3] = ["img1.png", "img2.png", "img3.png"];
@@ -45,24 +41,18 @@ fn setup(name: &str) -> (Config, PathBuf) {
     (cfg, dir)
 }
 
-/// App with items focused and the cursor on img2.png (`l`, then `j`).
-fn app_on_img2(name: &str, sys: &FakeSystem) -> (App, PathBuf) {
-    let (cfg, dir) = setup(name);
+/// App over `cfg` with items focused and the cursor on img2.png (`l`, then `j`).
+fn app_cursor_img2(cfg: Config, sys: &FakeSystem) -> App {
     let mut app = App::new(cfg, Box::new(sys.clone()));
     press(&mut app, 'l');
     press(&mut app, 'j');
-    (app, dir)
+    app
 }
 
-fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
-}
-
-/// Asserts some rendered row contains `text`.
-fn assert_status(app: &mut App, text: &str) {
-    common::assert_status(&draw(app), text);
+/// App with items focused and the cursor on img2.png (`l`, then `j`).
+fn app_on_img2(name: &str, sys: &FakeSystem) -> (App, PathBuf) {
+    let (cfg, dir) = setup(name);
+    (app_cursor_img2(cfg, sys), dir)
 }
 
 fn assert_only_highlighted(app: &mut App, expected: &str) {
@@ -112,7 +102,7 @@ fn enter_spawns_ln_themectl_once_and_shows_applying() {
             vec!["-w".to_string(), format!("{}/img2.png", dir.display())]
         )]
     );
-    assert_status(&mut app, "Applying img2.png…");
+    assert_app_status(&mut app, "Applying img2.png…");
 }
 
 #[test]
@@ -126,7 +116,7 @@ fn second_enter_while_running_does_not_spawn_again() {
     enter(&mut app);
 
     assert_eq!(sys.spawn_calls().len(), 1, "calls: {:?}", sys.spawn_calls());
-    assert_status(&mut app, "Applying img2.png…");
+    assert_app_status(&mut app, "Applying img2.png…");
 }
 
 #[test]
@@ -151,11 +141,11 @@ fn done_job_shows_applied_after_tick() {
     let (mut app, _dir) = app_on_img2("s6-done", &sys);
     enter(&mut app);
     app.tick();
-    assert_status(&mut app, "Applying img2.png…");
+    assert_app_status(&mut app, "Applying img2.png…");
 
     sys.set_job_state(JobState::Done);
     app.tick();
-    assert_status(&mut app, "Applied img2.png");
+    assert_app_status(&mut app, "Applied img2.png");
 }
 
 #[test]
@@ -168,7 +158,7 @@ fn failed_job_shows_apply_failed_with_reason_after_tick() {
 
     sys.set_job_state(JobState::Failed("exit 1".to_string()));
     app.tick();
-    assert_status(&mut app, "Apply failed: exit 1");
+    assert_app_status(&mut app, "Apply failed: exit 1");
 }
 
 #[test]
@@ -180,7 +170,7 @@ fn spawn_error_shows_not_found_status_without_panicking() {
     let (mut app, _dir) = app_on_img2("s6-notfound", &sys);
     enter(&mut app);
 
-    assert_status(&mut app, "ln-themectl not found: not found");
+    assert_app_status(&mut app, "ln-themectl not found: not found");
 }
 
 /// App whose current_wallpaper file names img1 at construction; items focused, cursor on img2.
@@ -190,10 +180,7 @@ fn app_current_img1_cursor_img2(name: &str, sys: &FakeSystem) -> (App, PathBuf, 
     let cur = tempdir(&format!("{name}-cache")).join("current_wallpaper");
     fs::write(&cur, format!("{}/img1.png\n", dir.display())).unwrap();
     cfg.current_wallpaper_file = cur.clone();
-    let mut app = App::new(cfg, Box::new(sys.clone()));
-    press(&mut app, 'l');
-    press(&mut app, 'j');
-    (app, dir, cur)
+    (app_cursor_img2(cfg, sys), dir, cur)
 }
 
 /// y rows of every `●` in the items column.

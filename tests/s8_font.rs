@@ -11,13 +11,9 @@ use std::path::PathBuf;
 
 use common::*;
 use ln_hub::{App, Config, JobState};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 
-const W: u16 = 80;
-const H: u16 = 24;
 const DEFAULT_FONT: &str = "Terminess Nerd Font Propo";
 const SIZE_ERR: &str = "Font size must be 6-72";
 
@@ -86,12 +82,6 @@ fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
         press(app, c);
     }
-}
-
-fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
 }
 
 fn shows(app: &mut App, text: &str) -> bool {

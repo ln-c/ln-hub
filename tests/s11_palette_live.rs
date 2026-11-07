@@ -17,8 +17,6 @@ use std::time::{Duration, SystemTime};
 
 use common::*;
 use ln_hub::{App, Config};
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier};
 
@@ -91,18 +89,16 @@ fn app_with_colors(name: &str, colors: &Path) -> App {
 }
 
 fn draw(app: &mut App) -> Buffer {
-    let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
-    term.draw(|f| app.render(f)).unwrap();
-    term.backend().buffer().clone()
+    draw_sized(app, W, H)
 }
 
 /// Style of the highlighted module row (`Theme`, selected at start).
-fn module_style(app: &mut App) -> Style {
+fn module_style(app: &mut App) -> CellStyle {
     name_style(&draw(app), "Theme", 0, MODULES_X_END)
 }
 
 /// Style of the highlighted Theme item (`img1.png`); the items column must be focused.
-fn item_style(app: &mut App) -> Style {
+fn item_style(app: &mut App) -> CellStyle {
     name_style(&draw(app), "img1.png", ITEMS_X_START, ITEMS_X_END)
 }
 
@@ -120,6 +116,7 @@ fn highlight_fgs(app: &mut App) -> (Color, Color) {
     (module, item_style(app).0)
 }
 
+/// Items-column x-range differs from s10's, so this wrapper stays local.
 fn items_hit(buf: &Buffer, text: &str) -> Option<(u16, u16)> {
     items_hit_within(buf, text, ITEMS_X_START, ITEMS_X_END)
 }
