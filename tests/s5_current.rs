@@ -66,9 +66,9 @@ fn dump(buf: &Buffer) -> String {
 }
 
 fn name_pos(buf: &Buffer, name: &str) -> (u16, u16) {
-    *items_hits(buf, name).first().unwrap_or_else(|| {
-        panic!("`{name}` not found in items column; buffer:\n{}", dump(buf))
-    })
+    *items_hits(buf, name)
+        .first()
+        .unwrap_or_else(|| panic!("`{name}` not found in items column; buffer:\n{}", dump(buf)))
 }
 
 fn name_style(buf: &Buffer, name: &str) -> Style {
@@ -88,7 +88,8 @@ fn assert_only_highlighted(buf: &Buffer, expected: &str) {
         dump(buf)
     );
     assert_ne!(
-        hl, others[0].1,
+        hl,
+        others[0].1,
         "`{expected}` must be the highlighted row (style must differ from the others), got {styles:?}; buffer:\n{}",
         dump(buf)
     );
