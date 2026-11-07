@@ -1,5 +1,5 @@
 ---
-spec: ../../specs/ln-hub-v1.md
+spec: ../../../specs/2026-11-01-ln-hub-v1-design.md
 slice_id: S18-review-followups
 status: green
 ---
@@ -108,7 +108,7 @@ status: green
     implementer's call as long as `lib.rs` exports stay the same.
   - Not in scope: replaying keys that arrive in the query window, a screen emulator for the pty
     tests, a Theme popup, and a `portable-pty` upgrade.
-- Follow-ups (deferred, non-blocking review items):
+- Follow-ups (deferred, non-blocking review items; now tracked as S19 popup tidy, S20 rustfmt and S21 pty helper dedup):
   - Popup fields `row` / `kind` stay `pub(crate)` because `MonitorsPane::popup` builds
     `Popup { row, kind }`; a `Popup::new` would allow private fields.
   - `PopupKind::Confirm(PaneAction)` admits an unreachable `Status` arm (`popup.rs`); a narrower

@@ -1,5 +1,5 @@
 ---
-spec: ../../specs/ln-hub-v1.md
+spec: ../../../specs/2026-11-01-ln-hub-v1-design.md
 slice_id: S5-current-wallpaper
 status: green
 ---

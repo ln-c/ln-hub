@@ -1,5 +1,5 @@
 ---
-spec: ../../specs/ln-hub-v1.md
+spec: ../../../specs/2026-11-01-ln-hub-v1-design.md
 slice_id: S16-init-status
 status: green
 ---
@@ -17,7 +17,7 @@ status: green
     iteration where `ImageView::query_pending()` turns false.
   - `App::tick_at(&mut self, now: std::time::Instant)`: `tick()` is `tick_at(Instant::now())`.
     It does what `tick` does today and also expires `Ready`.
-  - Added to the public seam list in `specs/ln-hub-v1.md` when the slice is green.
+  - Added to the public seam list in `docs/superpowers/specs/2026-11-01-ln-hub-v1-design.md` when the slice is green.
 - test_paths: [tests/s16_init_status.rs, tests/s16_pty.rs, tests/common/**, tests/s14_pty.rs]
 - owned_paths: [src/**]
 - acceptance_criteria:
