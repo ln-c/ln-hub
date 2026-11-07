@@ -187,8 +187,9 @@ fn l_encodes_off_the_ui_thread_and_logs_encode_and_draw_times() {
 
 #[test]
 fn fast_hovering_ends_with_the_hovered_wallpaper_drawn() {
-    // Catches: a response routed to (or dropped for) the wrong entry when hovering moves faster
-    // than the encodes, leaving the last hovered wallpaper never drawn.
+    // Catches: the last-hovered image never drawing (a dropped or stuck reply) when hovering
+    // moves faster than the encodes. a/b/c are identical images, so a reply routed to the wrong
+    // entry is not distinguishable here.
     let mut s = Session::spawn_with_env(
         "s22-hover",
         |home| {
@@ -221,7 +222,10 @@ fn fast_hovering_ends_with_the_hovered_wallpaper_drawn() {
 
 #[test]
 fn q_during_a_pending_encode_exits_0_within_1s() {
-    // Catches: the encode worker (or a blocking wait on it) holding up the exit.
+    // Catches: the encode worker (or a blocking wait on it) holding up the exit. In a debug
+    // build the large decode is usually still running when `q` arrives, so this mostly guards
+    // "q exits promptly while background work is pending"; the mid-encode case is checked by
+    // reading (no worker is joined) and in the S24 VM run.
     let mut s = Session::spawn_with_env("s22-quit", write_large, timing_env);
     answer_query(&mut s);
 

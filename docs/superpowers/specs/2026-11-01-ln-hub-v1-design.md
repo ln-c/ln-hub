@@ -107,7 +107,7 @@ pub struct ProcSystem { .. } // real System; ProcSystem::new(log: PathBuf) (S13)
   - Internal modules are never mocked.
 - The bin (`src/main.rs`) wires a real `ProcSystem` (std::process; `spawn` = detached child with
   stdout/stderr to `~/.cache/ln-hub/jobs.log`) and the crossterm event loop. It also handles the
-  sixel image preview (ratatui-image), which is verified manually in the VM, not by tests.
+  sixel image preview (ratatui-image), which is covered by pty tests (S18, S22) plus manual VM checks (S17/S18, S24).
   - The sixel resize+encode runs on a worker thread through `ratatui_image::thread::ThreadProtocol`
     (S22), so the UI thread never blocks on an encode.
   - The opt-in `LN_HUB_TIMING=<file>` env var makes the bin append `encode <cols>x<rows> <ms>ms` and
@@ -154,7 +154,10 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - How deep to recurse into `wallpaper_dir`. v1: top level plus one subdirectory level.
   - A custom sixel encoder: the dither and the colour count are hardcoded in ratatui-image, so
     changing them would need a fork. Not planned; decide after the S24 timing shows whether the
-    encode or the terminal write dominates.
+    encode or the terminal write dominates. S24's answer: the encode dominates (release VM, foot
+    176x43: encode ~36-71 ms vs draw ~9-37 ms, see `tests/manual/s24/notes.md`), so slow terminal
+    writes are not the bottleneck; a custom encoder stays unplanned unless encode cost becomes a
+    problem.
   - Terminal write cost: if S24 finds that the `terminal.draw` flush of the sixel bytes dominates
     the encode, that is an open question, not fixed in S19-S24.
   - `[profile.dev.package."*"] opt-level` for debug builds: not needed, because the VM and the

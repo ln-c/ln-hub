@@ -65,7 +65,7 @@ fn run(
             was_pending = false;
             app.init_finished(Instant::now());
         }
-        // Timing off costs this one `Option` check per frame.
+        // Timing off costs a couple of `Option` checks per frame.
         let start = seen.as_ref().map(|_| Instant::now());
         // `draw` flushes, so a slow terminal write is inside the timed call.
         terminal.draw(|f| {
@@ -167,6 +167,16 @@ fn main() -> ExitCode {
     // For its panic hook, raw mode and the alternate screen; the bin draws through its own
     // terminal below so the sixel bytes can be noticed on their way out.
     let _ = ratatui::init();
+    // `init` hooks every panic to `restore()`, including the ones the image workers catch with
+    // `catch_unwind`; that would drop raw mode under a running TUI. Keep the hook for the main
+    // thread only; a worker panic becomes a `Failed` entry instead.
+    let main_id = std::thread::current().id();
+    let ratatui_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if std::thread::current().id() == main_id {
+            ratatui_hook(info);
+        }
+    }));
     let spy = SixelSpy {
         inner: io::stdout(),
         seen: seen.clone(),

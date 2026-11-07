@@ -141,8 +141,9 @@ fn encode_worker(jobs: Receiver<EncodeJob>, replies: Sender<Encoded>, timing: Op
     }) = jobs.recv()
     {
         let start = Instant::now();
-        // `ResizeRequest::resize_encode` panics on an empty size (nothing gets encoded), so that
-        // is answered as a failure without calling it.
+        // `ResizeRequest::resize_encode` panics on an empty size (nothing gets encoded) on a
+        // first encode, and on a re-encode it would return the stale previous result and the
+        // request would ping-pong; the guard answers both as a failure without calling it.
         let response = if size.width == 0 || size.height == 0 {
             None
         } else {
