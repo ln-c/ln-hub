@@ -503,7 +503,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - src/config.rs depends on `pane::Action` for the quit validation; a small `keymap` module
     would decouple them.
   - The idle/in-flight policy is split: an `idle` bool into `handle_prompt_key` and an
-    `Apply` guard in `App`. Untested: opening a filter or font prompt while a job is in flight.
+    `Apply` guard in `App`. Filtering while a job is in flight is pinned in s12_filter.rs.
   - `ThemePane::visible()` allocates and lowercases on every call; cache it if lists grow.
   - `Action` mixes app-level (Quit, Left/Right focus) and pane-level variants; fine with two
     panes.
@@ -513,9 +513,9 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     `toggle`'s `match m.disabled` reads worse than `if`/`else`; the Esc arm must clear before
     closing the prompt (add a comment); the two `if filtering { cursor = 0 }` copies and the
     two `Prompt::new(kind, String::new())` calls could be folded.
-  - Untested: `.saturating_sub(1)` in the module-column `Down` (empty module list); `Esc` from a
-    reopened filter prompt.
-  - `gg`/`G` (top/bottom) and `?` (help) from the default keymap are in no slice yet.
+  - Untested: `.saturating_sub(1)` in the module-column `Down` (empty module list). `Esc` from
+    a reopened filter prompt is pinned in s12_filter.rs.
+  - `gg`/`G` (top/bottom) and `?` (help) from the default keymap: moved to S13.
 
 ### Slice 13
 - slice_id: S13-bin
@@ -562,3 +562,8 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     entry missing a field makes the whole list unavailable, and `[]` shows a blank list.
   - (S10) Manual check: the status is never cleared and Enter while a job runs is silent.
     Confirm this reads well in foot.
+  - (S12) The default keymap's `gg`/`G` (top/bottom of the focused column) and `?` (help) are
+    not implemented. Add them as `Action`s in src/pane.rs: `G` and `?` join the built-in keys
+    the quit key may not use; `gg` needs a pending-`g` state in `App` (a lone `g` then another
+    key does nothing). While a prompt is open they are text. Help can be a status-row or
+    overlay list of the active keys.

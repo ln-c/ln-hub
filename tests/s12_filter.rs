@@ -13,7 +13,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use common::*;
-use ln_hub::{App, Config};
+use ln_hub::{App, Config, JobState};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::KeyCode;
 
@@ -516,4 +516,52 @@ fn esc_after_zero_matches_restores_all_rows_and_highlights_the_first() {
     assert_lacks(&mut app, "Filter:");
     assert_rendered(&mut app, &ABC, &ABC);
     assert_highlighted(&mut app, &ABC, "a1.png");
+}
+
+// ---- guards: in-flight job and reopened prompt ----
+
+#[test]
+fn filtering_while_a_job_is_in_flight_filters_without_a_second_spawn() {
+    // GUARD (may already pass): Catches: the filter prompt being blocked or ignored while a job
+    // runs, Enter on the prompt spawning a second ln-themectl, or the filter being dropped when
+    // the job finishes and tick runs.
+    let (mut app, sys, dir) = focused("s12-inflight", &ABC);
+    sys.set_job_state(JobState::Running);
+    enter(&mut app); // applies a1.png; the job stays Running
+    assert_eq!(sys.spawn_calls(), vec![spawn_for(&dir, "a1.png")]);
+    app.tick();
+    press(&mut app, '/');
+    type_str(&mut app, "b");
+    assert_rendered(&mut app, &ABC, &["b1.png", "b2.png"]);
+    assert_shows(&mut app, "Filter: b");
+    enter(&mut app); // closes the prompt, keeps the filter
+    assert_lacks(&mut app, "Filter:");
+    assert_rendered(&mut app, &ABC, &["b1.png", "b2.png"]);
+    assert_eq!(
+        sys.spawn_calls(),
+        vec![spawn_for(&dir, "a1.png")],
+        "closing the prompt must not spawn a second job"
+    );
+    sys.set_job_state(JobState::Done);
+    app.tick();
+    assert_rendered(&mut app, &ABC, &["b1.png", "b2.png"]);
+    assert_eq!(sys.spawn_calls().len(), 1, "tick must not spawn either");
+}
+
+#[test]
+fn esc_from_a_reopened_prompt_clears_the_filter_and_keeps_the_highlight() {
+    // GUARD (may already pass): Catches: Esc in a reopened prompt only closing it (filter kept),
+    // or resetting the cursor to the first row instead of keeping the highlighted wallpaper.
+    let (mut app, _sys, _dir) = focused("s12-esc-reopened", &ABC);
+    press(&mut app, '/');
+    press(&mut app, 'b');
+    enter(&mut app);
+    press(&mut app, 'j');
+    assert_highlighted(&mut app, &["b1.png", "b2.png"], "b2.png");
+    press(&mut app, '/');
+    assert_shows(&mut app, "Filter: b");
+    esc(&mut app);
+    assert_rendered(&mut app, &ABC, &ABC);
+    assert_lacks(&mut app, "Filter:");
+    assert_highlighted(&mut app, &ABC, "b2.png");
 }
