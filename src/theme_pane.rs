@@ -1,4 +1,5 @@
-//! The Theme items pane: the wallpaper list with its applied-wallpaper mark and cursor.
+//! The Theme items pane: the wallpaper list with its applied-wallpaper mark and cursor, and the
+//! font summary read from the Hyprland env file.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -7,6 +8,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
+use crate::font::Font;
 use crate::style::HIGHLIGHT;
 use crate::wallpaper::{self, Kind, Wallpaper};
 
@@ -69,16 +71,20 @@ fn preview_lines(w: &Wallpaper) -> Vec<String> {
 pub(crate) struct ThemePane {
     wallpaper_dir: PathBuf,
     wallpapers: Vec<Wallpaper>,
-    /// File that records the applied wallpaper, re-read by `reload_current`.
+    /// File that records the applied wallpaper, re-read by `reload`.
     current_file: PathBuf,
     /// Path of the applied wallpaper, marked with `●` when it is in the list.
     current: Option<PathBuf>,
     /// Index into `wallpapers` of the highlighted row; starts on the applied wallpaper.
     cursor: usize,
+    /// Hyprland env file that records the font, re-read by `reload`.
+    env_file: PathBuf,
+    /// The font shown in the Theme view.
+    font: Font,
 }
 
 impl ThemePane {
-    pub(crate) fn new(wallpaper_dir: PathBuf, current_file: &Path) -> ThemePane {
+    pub(crate) fn new(wallpaper_dir: PathBuf, current_file: &Path, env_file: &Path) -> ThemePane {
         let wallpapers = wallpaper::discover(&wallpaper_dir);
         let current = load_current(current_file);
         let cursor = wallpapers
@@ -91,12 +97,21 @@ impl ThemePane {
             current_file: current_file.to_path_buf(),
             current,
             cursor,
+            env_file: env_file.to_path_buf(),
+            font: Font::load(env_file),
         }
     }
 
-    /// Re-reads the applied wallpaper so the `●` mark moves; the cursor is left where it is.
-    pub(crate) fn reload_current(&mut self) {
+    /// Re-reads the applied wallpaper so the `●` mark moves, and the font from the env file; the
+    /// cursor is left where it is.
+    pub(crate) fn reload(&mut self) {
         self.current = load_current(&self.current_file);
+        self.font = Font::load(&self.env_file);
+    }
+
+    /// The font name and size as the Theme view shows them.
+    pub(crate) fn font_summary(&self) -> String {
+        self.font.summary()
     }
 
     /// The wallpaper under the cursor; `None` when the list is empty.
