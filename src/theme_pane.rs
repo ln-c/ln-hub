@@ -127,8 +127,14 @@ impl ThemePane {
         self.cursor = self.cursor.saturating_add_signed(delta).min(last);
     }
 
-    /// Draws the pane inside `block`, which the caller has already styled for focus.
-    pub(crate) fn render(&self, f: &mut Frame, area: Rect, block: Block) {
+    /// Draws the wallpaper list and the details of the wallpaper under the cursor.
+    pub(crate) fn render(&self, f: &mut Frame, items_area: Rect, preview_area: Rect) {
+        self.render_items(f, items_area);
+        self.render_preview(f, preview_area);
+    }
+
+    fn render_items(&self, f: &mut Frame, area: Rect) {
+        let block = Block::bordered().title("Items");
         if self.wallpapers.is_empty() {
             let msg = format!("No wallpapers in {}", self.wallpaper_dir.display());
             f.render_widget(Paragraph::new(msg).block(block), area);
@@ -151,8 +157,9 @@ impl ThemePane {
         f.render_stateful_widget(list, area, &mut state);
     }
 
-    /// Draws the details of the wallpaper under the cursor inside `block`; empty when there is none.
-    pub(crate) fn render_preview(&self, f: &mut Frame, area: Rect, block: Block) {
+    /// Draws the details of the wallpaper under the cursor; empty when there is none.
+    fn render_preview(&self, f: &mut Frame, area: Rect) {
+        let block = Block::bordered().title("Preview");
         let text = self
             .selected()
             .map(|w| preview_lines(w).join("\n"))
