@@ -6,7 +6,7 @@ use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use serde::Deserialize;
 
-use crate::pane::{Action, Cursor, PaneAction};
+use crate::pane::{Action, Cursor, PaneAction, Program};
 use crate::system::System;
 
 /// Shown in the items column when `hyprctl` fails or prints something unreadable.
@@ -95,21 +95,25 @@ impl MonitorsPane {
         None
     }
 
+    /// Nothing to reset when focus leaves the pane.
+    pub(crate) fn unfocus(&mut self) {}
+
     /// Toggles the monitor under the cursor through `ln-monitorctl`, unless it is the last
     /// enabled one.
     fn toggle(&self) -> Option<PaneAction> {
         let monitors = self.monitors.as_ref()?;
         let m = monitors.get(self.cursor.get())?;
-        let power = if m.disabled {
-            Power::On
-        } else if monitors.iter().filter(|m| !m.disabled).count() <= 1 {
-            return Some(PaneAction::Status(
-                "Refusing to disable the last enabled monitor".to_owned(),
-            ));
-        } else {
-            Power::Off
+        let power = match m.disabled {
+            true => Power::On,
+            false if monitors.iter().filter(|m| !m.disabled).count() <= 1 => {
+                return Some(PaneAction::Status(
+                    "Refusing to disable the last enabled monitor".to_owned(),
+                ));
+            }
+            false => Power::Off,
         };
         Some(PaneAction::Spawn {
+            program: Program::Monitorctl,
             args: vec![m.name.clone(), power.as_str().to_owned()],
             name: format!("{} {}", m.name, power.as_str()),
         })

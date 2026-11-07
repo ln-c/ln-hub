@@ -11,7 +11,7 @@ use ratatui::style::Style;
 use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 
 use crate::font::{self, Font};
-use crate::pane::{Action, Cursor, PaneAction};
+use crate::pane::{Action, Cursor, PaneAction, Program};
 use crate::wallpaper::{self, Kind, Wallpaper};
 
 /// Row prefix for the applied wallpaper.
@@ -65,7 +65,7 @@ fn preview_lines(w: &Wallpaper) -> Vec<String> {
     lines
 }
 
-/// Which font setting a prompt edits.
+/// What a prompt edits.
 enum PromptKind {
     FontName,
     FontSize,
@@ -79,11 +79,8 @@ struct Prompt {
 }
 
 impl Prompt {
-    fn new(kind: PromptKind) -> Prompt {
-        Prompt {
-            kind,
-            text: String::new(),
-        }
+    fn new(kind: PromptKind, text: String) -> Prompt {
+        Prompt { kind, text }
     }
 
     fn line(&self) -> String {
@@ -97,22 +94,27 @@ impl Prompt {
 
     /// The `ln-themectl` job the text asks for; `None` for an empty name.
     fn command(&self) -> Option<PaneAction> {
-        let (flag, label, value) = match self.kind {
-            PromptKind::FontName => ("-f", "font name", self.text.trim().to_owned()),
+        match self.kind {
+            PromptKind::FontName => font_job("-f", "font name", self.text.trim().to_owned()),
             PromptKind::FontSize => match font::parse_size(&self.text) {
-                Some(size) => ("-s", "font size", size.to_string()),
-                None => return Some(PaneAction::Status(font::FONT_SIZE_ERROR.to_owned())),
+                Some(size) => font_job("-s", "font size", size.to_string()),
+                None => Some(PaneAction::Status(font::FONT_SIZE_ERROR.to_owned())),
             },
-            PromptKind::Filter => return None,
-        };
-        if value.is_empty() {
-            return None;
+            PromptKind::Filter => None,
         }
-        Some(PaneAction::Spawn {
-            name: format!("{label} {value}"),
-            args: vec![flag.to_owned(), value],
-        })
     }
+}
+
+/// The `ln-themectl` job that sets a font `label` through `flag`; `None` for an empty value.
+fn font_job(flag: &str, label: &str, value: String) -> Option<PaneAction> {
+    if value.is_empty() {
+        return None;
+    }
+    Some(PaneAction::Spawn {
+        program: Program::Themectl,
+        name: format!("{label} {value}"),
+        args: vec![flag.to_owned(), value],
+    })
 }
 
 pub(crate) struct ThemePane {
@@ -125,7 +127,8 @@ pub(crate) struct ThemePane {
     /// Index into the visible (filtered) rows of the highlighted row; starts on the applied
     /// wallpaper.
     cursor: Cursor,
-    /// Text the wallpaper names must contain (case-insensitively); empty shows every row.
+    /// Kept filter: text the wallpaper names must contain (case-insensitively); empty shows
+    /// every row. While the filter prompt is open its text is used instead.
     filter: String,
     /// The open prompt; it takes every key until closed.
     prompt: Option<Prompt>,
@@ -170,9 +173,20 @@ impl ThemePane {
         self.font.summary()
     }
 
+    /// The filter in effect: the filter prompt's text while it is open, else the kept filter.
+    fn filter_text(&self) -> &str {
+        match &self.prompt {
+            Some(Prompt {
+                kind: PromptKind::Filter,
+                text,
+            }) => text,
+            _ => &self.filter,
+        }
+    }
+
     /// The wallpapers whose name matches the filter, in list order.
     fn visible(&self) -> Vec<&Wallpaper> {
-        let needle = self.filter.to_lowercase();
+        let needle = self.filter_text().to_lowercase();
         self.wallpapers
             .iter()
             .filter(|w| w.name.to_lowercase().contains(&needle))
@@ -184,8 +198,13 @@ impl ThemePane {
         self.visible().get(self.cursor.get()).copied()
     }
 
+    /// Focus left the pane: drops the filter.
+    pub(crate) fn unfocus(&mut self) {
+        self.clear_filter();
+    }
+
     /// Drops the filter, keeping the highlighted wallpaper highlighted.
-    pub(crate) fn clear_filter(&mut self) {
+    fn clear_filter(&mut self) {
         let path = self.selected().map(|w| w.path.clone());
         self.filter.clear();
         self.cursor = Cursor::at(
@@ -199,11 +218,17 @@ impl ThemePane {
         match action {
             Action::Down => self.cursor.move_by(1, self.visible().len()),
             Action::Up => self.cursor.move_by(-1, self.visible().len()),
-            Action::Filter => self.prompt = Some(Prompt::new(PromptKind::Filter)),
+            Action::Filter => {
+                self.prompt = Some(Prompt::new(PromptKind::Filter, self.filter.clone()))
+            }
             Action::Cancel => self.clear_filter(),
             Action::Apply => return self.apply_selected(),
-            Action::FontName => self.prompt = Some(Prompt::new(PromptKind::FontName)),
-            Action::FontSize => self.prompt = Some(Prompt::new(PromptKind::FontSize)),
+            Action::FontName => {
+                self.prompt = Some(Prompt::new(PromptKind::FontName, String::new()))
+            }
+            Action::FontSize => {
+                self.prompt = Some(Prompt::new(PromptKind::FontSize, String::new()))
+            }
             _ => {}
         }
         None
@@ -213,9 +238,15 @@ impl ThemePane {
     fn apply_selected(&self) -> Option<PaneAction> {
         let w = self.selected()?;
         Some(PaneAction::Spawn {
+            program: Program::Themectl,
             args: vec!["-w".to_owned(), w.path.to_string_lossy().into_owned()],
             name: w.name.clone(),
         })
+    }
+
+    /// Whether a prompt is open and taking every key.
+    pub(crate) fn prompt_open(&self) -> bool {
+        self.prompt.is_some()
     }
 
     /// The prompt as shown in the status row; `None` when none is open.
@@ -230,23 +261,27 @@ impl ThemePane {
         let prompt = self.prompt.as_mut()?;
         let filtering = matches!(prompt.kind, PromptKind::Filter);
         match code {
-            KeyCode::Char(c) => prompt.text.push(c),
+            KeyCode::Char(c) => {
+                prompt.text.push(c);
+                if filtering {
+                    self.cursor = Cursor::at(0);
+                }
+            }
             KeyCode::Backspace => {
                 prompt.text.pop();
+                if filtering {
+                    self.cursor = Cursor::at(0);
+                }
             }
             KeyCode::Esc => {
-                self.prompt = None;
                 if filtering {
                     self.clear_filter();
                 }
+                self.prompt = None;
             }
-            KeyCode::Enter if filtering => self.prompt = None,
+            KeyCode::Enter if filtering => self.filter = self.prompt.take()?.text,
             KeyCode::Enter if idle => return self.prompt.take()?.command(),
             _ => {}
-        }
-        if filtering && let Some(prompt) = &self.prompt {
-            self.filter.clone_from(&prompt.text);
-            self.cursor = Cursor::at(0);
         }
         None
     }

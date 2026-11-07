@@ -9,7 +9,7 @@ use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
 use crate::config::{Config, Module};
 use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
-use crate::pane::{Action, PaneAction};
+use crate::pane::{Action, PaneAction, Program};
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::ThemePane;
 
@@ -71,7 +71,7 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
-        if self.theme.prompt_line().is_some() {
+        if self.theme.prompt_open() {
             let idle = self.job.is_none();
             let pane_action = self.theme.handle_prompt_key(key.code, idle);
             self.run(pane_action);
@@ -90,14 +90,15 @@ impl App {
                 None
             }
             (Some(module), Action::Left) => {
-                if module == Module::Theme {
-                    self.theme.clear_filter();
+                match module {
+                    Module::Theme => self.theme.unfocus(),
+                    Module::Monitors => self.monitors.unfocus(),
                 }
                 self.items_focused = false;
                 None
             }
             (None, Action::Down) => {
-                self.selected = (self.selected + 1).min(self.modules.len() - 1);
+                self.selected = (self.selected + 1).min(self.modules.len().saturating_sub(1));
                 None
             }
             (None, Action::Up) => {
@@ -209,10 +210,14 @@ impl App {
     /// Carries out what the focused pane asked for.
     fn run(&mut self, action: Option<PaneAction>) {
         match action {
-            Some(PaneAction::Spawn { args, name }) => {
-                let (prog, on_done) = match self.focused_module() {
-                    Some(Module::Monitors) => (MONITORCTL, OnDone::ReloadMonitors),
-                    _ => (THEMECTL, OnDone::ReloadTheme),
+            Some(PaneAction::Spawn {
+                program,
+                args,
+                name,
+            }) => {
+                let (prog, on_done) = match program {
+                    Program::Themectl => (THEMECTL, OnDone::ReloadTheme),
+                    Program::Monitorctl => (MONITORCTL, OnDone::ReloadMonitors),
                 };
                 let args: Vec<&str> = args.iter().map(String::as_str).collect();
                 self.spawn_job(prog, &args, name, on_done);

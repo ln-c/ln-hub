@@ -32,6 +32,8 @@ const CHAR_KEYS: [(char, Action); 6] = [
 const FILTER_KEY: char = '/';
 
 impl Action {
+    /// Resolves a key outside a prompt. The quit key is checked first; config validation keeps it
+    /// disjoint from the built-in keys, so the order never shadows a binding.
     pub(crate) fn from_key(code: KeyCode, quit_key: char) -> Option<Action> {
         match code {
             KeyCode::Char(c) if c == quit_key => Some(Action::Quit),
@@ -53,10 +55,21 @@ impl Action {
     }
 }
 
+/// The helper program a job runs.
+#[derive(Clone, Copy)]
+pub(crate) enum Program {
+    Themectl,
+    Monitorctl,
+}
+
 /// What a pane asks the app to do after a key.
 pub(crate) enum PaneAction {
-    /// Spawn the pane's program with `args` as the in-flight job, labelled `name`.
-    Spawn { args: Vec<String>, name: String },
+    /// Spawn `program` with `args` as the in-flight job, labelled `name`.
+    Spawn {
+        program: Program,
+        args: Vec<String>,
+        name: String,
+    },
     /// Show `message` in the status bar.
     Status(String),
 }
