@@ -227,3 +227,84 @@ fn spawn_error_shows_not_found_status_without_panicking() {
 
     assert_status(&mut app, "ln-themectl not found: not found");
 }
+
+/// App whose current_wallpaper file names img1 at construction; items focused, cursor on img2.
+/// Returns (app, dir, current-file path).
+fn app_current_img1_cursor_img2(name: &str, sys: &FakeSystem) -> (App, PathBuf, PathBuf) {
+    let (mut cfg, dir) = setup(name);
+    let cur = tempdir(&format!("{name}-cache")).join("current_wallpaper");
+    fs::write(&cur, format!("{}/img1.png\n", dir.display())).unwrap();
+    cfg.current_wallpaper_file = cur.clone();
+    let mut app = App::new(cfg, Box::new(sys.clone()));
+    press(&mut app, 'l');
+    press(&mut app, 'j');
+    (app, dir, cur)
+}
+
+/// y rows of every `●` in the items column.
+fn mark_rows(buf: &Buffer) -> Vec<u16> {
+    items_hits(buf, "●").into_iter().map(|(_, y)| y).collect()
+}
+
+fn row_of(buf: &Buffer, name: &str) -> u16 {
+    items_hits(buf, name)
+        .first()
+        .unwrap_or_else(|| panic!("`{name}` not found in items column; buffer:\n{}", dump(buf)))
+        .1
+}
+
+#[test]
+fn done_job_moves_current_mark_to_applied_wallpaper_and_keeps_cursor() {
+    // Catches: the app never re-reading current_wallpaper after a Done job (the `●` stays on the
+    // old wallpaper), or the reload re-running preselect and yanking the cursor off img2.
+    let sys = FakeSystem::new();
+    sys.set_job_state(JobState::Running);
+    let (mut app, dir, cur) = app_current_img1_cursor_img2("s6-reload", &sys);
+    let buf = draw(&mut app);
+    assert_eq!(
+        mark_rows(&buf),
+        vec![row_of(&buf, "img1.png")],
+        "{}",
+        dump(&buf)
+    );
+
+    enter(&mut app);
+    app.tick();
+    // Simulate ln-themectl recording the new current wallpaper.
+    fs::write(&cur, format!("{}/img2.png\n", dir.display())).unwrap();
+    sys.set_job_state(JobState::Done);
+    app.tick();
+
+    let buf = draw(&mut app);
+    assert_eq!(
+        mark_rows(&buf),
+        vec![row_of(&buf, "img2.png")],
+        "exactly one `●`, on the img2.png row; buffer:\n{}",
+        dump(&buf)
+    );
+    assert_only_highlighted(&mut app, "img2.png");
+}
+
+#[test]
+fn failed_job_does_not_reread_current_wallpaper() {
+    // Catches: re-reading current_wallpaper on Failed (the `●` must stay on the old wallpaper
+    // because nothing was applied). Pins a guard; passes before the Done-reload is implemented.
+    let sys = FakeSystem::new();
+    sys.set_job_state(JobState::Running);
+    let (mut app, dir, cur) = app_current_img1_cursor_img2("s6-noreload", &sys);
+
+    enter(&mut app);
+    app.tick();
+    fs::write(&cur, format!("{}/img2.png\n", dir.display())).unwrap();
+    sys.set_job_state(JobState::Failed("exit 1".to_string()));
+    app.tick();
+
+    let buf = draw(&mut app);
+    assert_eq!(
+        mark_rows(&buf),
+        vec![row_of(&buf, "img1.png")],
+        "`●` must stay on img1.png after a failed job; buffer:\n{}",
+        dump(&buf)
+    );
+    assert_only_highlighted(&mut app, "img2.png");
+}
