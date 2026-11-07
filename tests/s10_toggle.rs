@@ -12,16 +12,13 @@
 
 mod common;
 
-use std::fs;
 use std::io::ErrorKind;
 
 use common::*;
-use ln_hub::{App, Config, JobState};
+use ln_hub::{App, Config, JobState, Module};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::KeyCode;
-use ratatui::style::{Color, Modifier};
 
 const W: u16 = 120;
 const H: u16 = 24;
@@ -32,8 +29,6 @@ const EDP_ON: &str = "eDP-1  2880x1800@120  on";
 const DP_ON: &str = "DP-1  2560x1440@60  on";
 const DP_OFF: &str = "DP-1  2560x1440@60  off";
 const HDMI_ON: &str = "HDMI-A-1  1920x1080@60  on";
-
-type Style = (Color, Color, Modifier);
 
 fn mon(name: &str, w: u32, h: u32, hz: &str, disabled: bool) -> String {
     format!(
@@ -64,43 +59,10 @@ fn sys_with(mons: &[String]) -> FakeSystem {
     sys
 }
 
-/// App with the given keys pressed in order; the wallpaper dir holds img1.png / img2.png.
-fn app_after_keys(name: &str, sys: &FakeSystem, keys: &[char]) -> App {
-    let home = tempdir(&format!("{name}-home"));
-    let dir = tempdir(&format!("{name}-wall"));
-    for n in ["img1.png", "img2.png"] {
-        fs::write(dir.join(n), b"x").unwrap();
-    }
-    let mut cfg = Config::default_for(&home);
-    cfg.wallpaper_dir = dir;
-    let mut app = App::new(cfg, Box::new(sys.clone()));
-    for &c in keys {
-        app.handle_key(key(KeyCode::Char(c)));
-    }
-    app
-}
-
-/// Monitors selected (`j`) and the items column focused (`l`); the cursor is on the first monitor.
-fn monitors_app(name: &str, sys: &FakeSystem) -> App {
-    app_after_keys(name, sys, &['j', 'l'])
-}
-
-fn press(app: &mut App, c: char) {
-    app.handle_key(key(KeyCode::Char(c)));
-}
-
-fn enter(app: &mut App) {
-    app.handle_key(key(KeyCode::Enter));
-}
-
 fn draw(app: &mut App) -> Buffer {
     let mut term = Terminal::new(TestBackend::new(W, H)).unwrap();
     term.draw(|f| app.render(f)).unwrap();
     term.backend().buffer().clone()
-}
-
-fn dump(buf: &Buffer) -> String {
-    buffer_lines(buf).join("\n")
 }
 
 fn shows(app: &mut App, text: &str) -> bool {
@@ -109,12 +71,7 @@ fn shows(app: &mut App, text: &str) -> bool {
 
 /// Asserts some rendered row contains `text`.
 fn assert_status(app: &mut App, text: &str) {
-    let buf = draw(app);
-    assert!(
-        buffer_lines(&buf).iter().any(|l| l.contains(text)),
-        "status `{text}` not found anywhere; buffer:\n{}",
-        dump(&buf)
-    );
+    common::assert_status(&draw(app), text);
 }
 
 fn spawn(prog: &str, args: &[&str]) -> (String, Vec<String>) {
@@ -124,46 +81,20 @@ fn spawn(prog: &str, args: &[&str]) -> (String, Vec<String>) {
     )
 }
 
-fn hyprctl_runs(sys: &FakeSystem) -> usize {
-    sys.run_calls()
-        .iter()
-        .filter(|(prog, _)| prog == "hyprctl")
-        .count()
-}
-
-/// First cell of `text` inside the items column.
+/// First cell of `text` lying entirely inside the items column.
 fn items_hit(buf: &Buffer, text: &str) -> Option<(u16, u16)> {
-    let len = text.chars().count() as u16;
-    find_text(buf, text)
-        .into_iter()
-        .find(|&(x, _)| x >= ITEMS_X_START && x + len <= ITEMS_X_END)
+    items_hit_within(buf, text, ITEMS_X_START, ITEMS_X_END)
 }
 
-fn row_style(buf: &Buffer, text: &str) -> Style {
-    let (x, y) = items_hit(buf, text)
-        .unwrap_or_else(|| panic!("`{text}` not in the items column; buffer:\n{}", dump(buf)));
-    let c = &buf[(x, y)];
-    (c.fg, c.bg, c.modifier)
+/// Asserts `expected` is the only highlighted row among `rows`.
+fn assert_only_highlighted_among(app: &mut App, rows: &[&str], expected: &str) {
+    let buf = draw(app);
+    common::assert_only_highlighted(&buf, rows, expected, items_hit);
 }
 
 /// Asserts `expected` is the only highlighted row among eDP-1, DP-1 and HDMI-A-1.
 fn assert_only_highlighted(app: &mut App, expected: &str) {
-    let buf = draw(app);
-    let rows = [EDP_ON, DP_ON, HDMI_ON];
-    let styles: Vec<(&str, Style)> = rows.iter().map(|r| (*r, row_style(&buf, r))).collect();
-    let others: Vec<&(&str, Style)> = styles.iter().filter(|(r, _)| *r != expected).collect();
-    let hl = styles.iter().find(|(r, _)| *r == expected).unwrap().1;
-    assert!(
-        others.iter().all(|(_, s)| *s == others[0].1),
-        "non-highlighted rows must share one style, got {styles:?}; buffer:\n{}",
-        dump(&buf)
-    );
-    assert_ne!(
-        hl,
-        others[0].1,
-        "`{expected}` must be the highlighted row, got {styles:?}; buffer:\n{}",
-        dump(&buf)
-    );
+    assert_only_highlighted_among(app, &[EDP_ON, DP_ON, HDMI_ON], expected);
 }
 
 #[test]
@@ -269,23 +200,95 @@ fn cursor_starts_on_the_first_monitor_moves_with_j_k_and_clamps() {
 
 #[test]
 fn j_inside_monitors_items_does_not_move_the_module_column() {
-    // Catches: `j` in the Monitors items still driving the module column (so a later `k`/`l`
-    // or the view would change) instead of the monitor cursor; the Monitors view must stay up
-    // and Enter must act on the cursor row.
+    // Catches: `j` in the Monitors items still driving the module column instead of the monitor
+    // cursor. Monitors is listed FIRST here, so a buggy `j` would move the module selection to
+    // Theme (swapping the view to wallpapers); the Monitors view must stay up and Enter must act
+    // on the moved cursor row.
     let sys = sys_with(&[edp(false), dp(false), hdmi(false)]);
-    let mut a = monitors_app("s10-nomodule", &sys);
+    let mut a = app_with_modules(
+        "s10-nomodule",
+        &sys,
+        Some(vec![Module::Monitors, Module::Theme]),
+        &['l'],
+    );
+    assert_only_highlighted(&mut a, EDP_ON);
     press(&mut a, 'j');
     press(&mut a, 'j');
     let buf = draw(&mut a);
     assert!(
-        items_hit(&buf, HDMI_ON).is_some(),
+        items_hit(&buf, HDMI_ON).is_some() && !shows(&mut a, "img1.png"),
         "Monitors view must stay up; buffer:\n{}",
         dump(&buf)
     );
+    assert_only_highlighted(&mut a, HDMI_ON);
     enter(&mut a);
     assert_eq!(
         sys.spawn_calls(),
         vec![spawn("ln-monitorctl", &["HDMI-A-1", "off"])]
+    );
+}
+
+#[test]
+fn cursor_clamps_after_a_refresh_that_shrinks_the_list() {
+    // Catches: the cursor staying past the end after the refreshed list loses a monitor (no
+    // highlighted row, and Enter toggling a non-existent row / doing nothing).
+    let sys = sys_with(&[edp(false), dp(false), hdmi(false)]);
+    let mut a = monitors_app("s10-shrink", &sys);
+    press(&mut a, 'j');
+    press(&mut a, 'j');
+    enter(&mut a);
+    assert_eq!(
+        sys.spawn_calls(),
+        vec![spawn("ln-monitorctl", &["HDMI-A-1", "off"])]
+    );
+
+    sys.set_stdout("hyprctl", &json(&[edp(false), dp(false)]));
+    a.tick();
+    let buf = draw(&mut a);
+    assert!(
+        items_hit(&buf, HDMI_ON).is_none(),
+        "HDMI-A-1 must be gone after the refresh; buffer:\n{}",
+        dump(&buf)
+    );
+    assert_only_highlighted_among(&mut a, &[EDP_ON, DP_ON], DP_ON);
+    enter(&mut a);
+    assert_eq!(
+        sys.spawn_calls(),
+        vec![
+            spawn("ln-monitorctl", &["HDMI-A-1", "off"]),
+            spawn("ln-monitorctl", &["DP-1", "off"]),
+        ]
+    );
+}
+
+#[test]
+fn a_refusal_leaves_no_job_in_flight() {
+    // Catches: the last-enabled refusal marking a job as in flight (without spawning), so the
+    // next Enter on another monitor is swallowed until a tick that never comes.
+    let sys = sys_with(&[edp(false), dp(true)]);
+    let mut a = monitors_app("s10-refusal-free", &sys);
+    enter(&mut a);
+    assert_status(&mut a, "Refusing to disable the last enabled monitor");
+    assert!(sys.spawn_calls().is_empty());
+
+    press(&mut a, 'j');
+    enter(&mut a);
+    assert_eq!(
+        sys.spawn_calls(),
+        vec![spawn("ln-monitorctl", &["DP-1", "on"])]
+    );
+}
+
+#[test]
+fn enter_on_a_disabled_first_monitor_spawns_on_without_moving() {
+    // Catches: the toggle direction or cursor row being derived from something other than the
+    // initial cursor (first monitor) when that monitor is disabled.
+    let sys = sys_with(&[edp(true), dp(false)]);
+    let mut a = monitors_app("s10-first-disabled", &sys);
+    enter(&mut a);
+    assert_eq!(
+        sys.spawn_calls(),
+        vec![spawn("ln-monitorctl", &["eDP-1", "on"])]
     );
 }
 

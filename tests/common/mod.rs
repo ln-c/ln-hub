@@ -8,9 +8,10 @@ use std::process::Output;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use ln_hub::{JobId, JobState, System};
+use ln_hub::{App, Config, JobId, JobState, Module, System};
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::style::{Color, Modifier};
 
 pub type CallLog = Arc<Mutex<Vec<(String, Vec<String>)>>>;
 
@@ -178,4 +179,147 @@ pub fn tempdir(name: &str) -> PathBuf {
     ));
     std::fs::create_dir_all(&dir).unwrap();
     dir
+}
+
+/// Rendered style of one cell: (fg, bg, modifier).
+pub type Style = (Color, Color, Modifier);
+
+pub fn press(app: &mut App, c: char) {
+    app.handle_key(key(KeyCode::Char(c)));
+}
+
+pub fn enter(app: &mut App) {
+    app.handle_key(key(KeyCode::Enter));
+}
+
+/// The whole buffer as one string, for failure messages.
+pub fn dump(buf: &Buffer) -> String {
+    buffer_lines(buf).join("\n")
+}
+
+/// Hits of `text` whose first cell lies in the items column x-range `[x_start, x_end)`.
+pub fn items_hits(buf: &Buffer, text: &str, x_start: u16, x_end: u16) -> Vec<(u16, u16)> {
+    find_text(buf, text)
+        .into_iter()
+        .filter(|&(x, _)| (x_start..x_end).contains(&x))
+        .collect()
+}
+
+/// First hit of `text` lying ENTIRELY inside the items column x-range `[x_start, x_end)`.
+pub fn items_hit_within(buf: &Buffer, text: &str, x_start: u16, x_end: u16) -> Option<(u16, u16)> {
+    let len = text.chars().count() as u16;
+    find_text(buf, text)
+        .into_iter()
+        .find(|&(x, _)| x >= x_start && x + len <= x_end)
+}
+
+/// First cell of `name` starting inside the items column `[x_start, x_end)`; panics with a
+/// buffer dump when absent.
+pub fn name_cell(buf: &Buffer, name: &str, x_start: u16, x_end: u16) -> (u16, u16) {
+    *items_hits(buf, name, x_start, x_end)
+        .first()
+        .unwrap_or_else(|| {
+            panic!(
+                "`{name}` not found in items column (x in {x_start}..{x_end}); buffer:\n{}",
+                dump(buf)
+            )
+        })
+}
+
+/// Row `y` of `name` in the items column `[x_start, x_end)` (see `name_cell`).
+pub fn row_of(buf: &Buffer, name: &str, x_start: u16, x_end: u16) -> u16 {
+    name_cell(buf, name, x_start, x_end).1
+}
+
+pub fn cell_style(buf: &Buffer, (x, y): (u16, u16)) -> Style {
+    let c = &buf[(x, y)];
+    (c.fg, c.bg, c.modifier)
+}
+
+/// Style of the first letter of `name` (see `name_cell`).
+pub fn name_style(buf: &Buffer, name: &str, x_start: u16, x_end: u16) -> Style {
+    cell_style(buf, name_cell(buf, name, x_start, x_end))
+}
+
+/// Asserts `expected` is the only highlighted row among `rows`: the other rows share one style
+/// and the expected row's style differs. `locate` finds the first cell of a row's text.
+pub fn assert_only_highlighted(
+    buf: &Buffer,
+    rows: &[&str],
+    expected: &str,
+    locate: impl Fn(&Buffer, &str) -> Option<(u16, u16)>,
+) {
+    let styles: Vec<(&str, Style)> = rows
+        .iter()
+        .map(|r| {
+            let pos = locate(buf, r)
+                .unwrap_or_else(|| panic!("`{r}` not in the items column; buffer:\n{}", dump(buf)));
+            (*r, cell_style(buf, pos))
+        })
+        .collect();
+    let others: Vec<&(&str, Style)> = styles.iter().filter(|(r, _)| *r != expected).collect();
+    let hl = styles.iter().find(|(r, _)| *r == expected).unwrap().1;
+    assert!(
+        others.iter().all(|(_, s)| *s == others[0].1),
+        "non-highlighted rows must share one style, got {styles:?}; buffer:\n{}",
+        dump(buf)
+    );
+    assert_ne!(
+        hl,
+        others[0].1,
+        "`{expected}` must be the highlighted row (style must differ from the others), got {styles:?}; buffer:\n{}",
+        dump(buf)
+    );
+}
+
+/// Asserts some rendered row contains `text` (the status bar location is not fixed by the spec).
+pub fn assert_status(buf: &Buffer, text: &str) {
+    assert!(
+        buffer_lines(buf).iter().any(|l| l.contains(text)),
+        "status `{text}` not found anywhere; buffer:\n{}",
+        dump(buf)
+    );
+}
+
+/// Number of `hyprctl` invocations recorded by `run`.
+pub fn hyprctl_runs(sys: &FakeSystem) -> usize {
+    sys.run_calls()
+        .iter()
+        .filter(|(prog, _)| prog == "hyprctl")
+        .count()
+}
+
+/// App over a real temp wallpaper dir holding img1.png / img2.png (so a leaking Theme list would
+/// be visible), with the given keys pressed in order. `modules` overrides the module order.
+pub fn app_with_modules(
+    name: &str,
+    sys: &FakeSystem,
+    modules: Option<Vec<Module>>,
+    keys: &[char],
+) -> App {
+    let home = tempdir(&format!("{name}-home"));
+    let dir = tempdir(&format!("{name}-wall"));
+    for n in ["img1.png", "img2.png"] {
+        std::fs::write(dir.join(n), b"x").unwrap();
+    }
+    let mut cfg = Config::default_for(&home);
+    cfg.wallpaper_dir = dir;
+    if let Some(m) = modules {
+        cfg.modules = m;
+    }
+    let mut app = App::new(cfg, Box::new(sys.clone()));
+    for &c in keys {
+        press(&mut app, c);
+    }
+    app
+}
+
+/// `app_with_modules` with the default module order.
+pub fn app_after_keys(name: &str, sys: &FakeSystem, keys: &[char]) -> App {
+    app_with_modules(name, sys, None, keys)
+}
+
+/// Monitors selected (`j`) and the items column focused (`l`) under the default module order.
+pub fn monitors_app(name: &str, sys: &FakeSystem) -> App {
+    app_after_keys(name, sys, &['j', 'l'])
 }

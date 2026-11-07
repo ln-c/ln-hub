@@ -33,26 +33,6 @@ fn focus_and_draw(cfg: Config, width: u16) -> Buffer {
     term.backend().buffer().clone()
 }
 
-/// Hits of `text` starting inside the items column x-range `[ITEMS_X_START, items_end)`.
-fn items_hits(buf: &Buffer, text: &str, items_end: u16) -> Vec<(u16, u16)> {
-    find_text(buf, text)
-        .into_iter()
-        .filter(|&(x, _)| (ITEMS_X_START..items_end).contains(&x))
-        .collect()
-}
-
-fn items_row(buf: &Buffer, text: &str, items_end: u16) -> u16 {
-    items_hits(buf, text, items_end)
-        .first()
-        .unwrap_or_else(|| {
-            panic!(
-                "`{text}` not found in items column (x in {ITEMS_X_START}..{items_end}); buffer:\n{}",
-                buffer_lines(buf).join("\n")
-            )
-        })
-        .1
-}
-
 #[test]
 fn lists_sorted_naturally_hides_thumbs_and_non_media() {
     // Catches: unsorted/lexicographic order (img10 before img2), missing subdir-last ordering,
@@ -74,10 +54,10 @@ fn lists_sorted_naturally_hides_thumbs_and_non_media() {
     let buf = focus_and_draw(cfg, 80);
     let end = 40;
 
-    let mp4 = items_row(&buf, "b.mp4", end);
-    let img2 = items_row(&buf, "img2.png", end);
-    let img10 = items_row(&buf, "img10.png", end);
-    let sub = items_row(&buf, "images/c.jpg", end);
+    let mp4 = row_of(&buf, "b.mp4", ITEMS_X_START, end);
+    let img2 = row_of(&buf, "img2.png", ITEMS_X_START, end);
+    let img10 = row_of(&buf, "img10.png", ITEMS_X_START, end);
+    let sub = row_of(&buf, "images/c.jpg", ITEMS_X_START, end);
     assert!(
         mp4 < img2,
         "b.mp4 (row {mp4}) must precede img2.png (row {img2})"
@@ -92,12 +72,12 @@ fn lists_sorted_naturally_hides_thumbs_and_non_media() {
     );
 
     assert!(
-        items_hits(&buf, "b.jpg", end).is_empty(),
+        items_hits(&buf, "b.jpg", ITEMS_X_START, end).is_empty(),
         "video thumbnail b.jpg must be hidden; buffer:\n{}",
         buffer_lines(&buf).join("\n")
     );
     assert!(
-        items_hits(&buf, "notes.txt", end).is_empty(),
+        items_hits(&buf, "notes.txt", ITEMS_X_START, end).is_empty(),
         "notes.txt must be hidden; buffer:\n{}",
         buffer_lines(&buf).join("\n")
     );
@@ -111,7 +91,7 @@ fn assert_no_wallpapers_message(dir: &Path, name: &str) {
     let buf = focus_and_draw(cfg, 300);
     let msg = format!("No wallpapers in {}", dir.display());
     assert!(
-        !items_hits(&buf, &msg, 93).is_empty(),
+        !items_hits(&buf, &msg, ITEMS_X_START, 93).is_empty(),
         "expected `{msg}` in items column; buffer:\n{}",
         buffer_lines(&buf).join("\n")
     );
@@ -140,7 +120,7 @@ fn default_config_lists_pictures_wallpapers_under_home() {
     touch(&home.join("Pictures/Wallpapers/img2.png"));
     let buf = focus_and_draw(Config::default_for(&home), 80);
     assert!(
-        !items_hits(&buf, "img2.png", 40).is_empty(),
+        !items_hits(&buf, "img2.png", ITEMS_X_START, 40).is_empty(),
         "img2.png must be listed in items column; buffer:\n{}",
         buffer_lines(&buf).join("\n")
     );

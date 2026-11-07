@@ -82,18 +82,10 @@ fn app(name: &str, sys: &FakeSystem) -> (App, PathBuf) {
     app_with_env(name, None, sys)
 }
 
-fn press(app: &mut App, c: char) {
-    app.handle_key(key(KeyCode::Char(c)));
-}
-
 fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
         press(app, c);
     }
-}
-
-fn enter(app: &mut App) {
-    app.handle_key(key(KeyCode::Enter));
 }
 
 fn draw(app: &mut App) -> Buffer {
@@ -102,21 +94,12 @@ fn draw(app: &mut App) -> Buffer {
     term.backend().buffer().clone()
 }
 
-fn dump(buf: &Buffer) -> String {
-    buffer_lines(buf).join("\n")
-}
-
 fn shows(app: &mut App, text: &str) -> bool {
     buffer_lines(&draw(app)).iter().any(|l| l.contains(text))
 }
 
 fn assert_shows(app: &mut App, text: &str) {
-    let buf = draw(app);
-    assert!(
-        buffer_lines(&buf).iter().any(|l| l.contains(text)),
-        "`{text}` not found anywhere; buffer:\n{}",
-        dump(&buf)
-    );
+    assert_status(&draw(app), text);
 }
 
 fn assert_lacks(app: &mut App, text: &str) {

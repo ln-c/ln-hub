@@ -20,16 +20,12 @@ use ln_hub::{App, Config, JobState};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
-use ratatui::crossterm::event::KeyCode;
-use ratatui::style::{Color, Modifier};
 
 const W: u16 = 80;
 const H: u16 = 24;
 const ITEMS_X_START: u16 = 20;
 const ITEMS_X_END: u16 = 40;
 const NAMES: [&str; 3] = ["img1.png", "img2.png", "img3.png"];
-
-type Style = (Color, Color, Modifier);
 
 fn touch(path: &Path) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -49,14 +45,6 @@ fn setup(name: &str) -> (Config, PathBuf) {
     (cfg, dir)
 }
 
-fn press(app: &mut App, c: char) {
-    app.handle_key(key(KeyCode::Char(c)));
-}
-
-fn enter(app: &mut App) {
-    app.handle_key(key(KeyCode::Enter));
-}
-
 /// App with items focused and the cursor on img2.png (`l`, then `j`).
 fn app_on_img2(name: &str, sys: &FakeSystem) -> (App, PathBuf) {
     let (cfg, dir) = setup(name);
@@ -72,51 +60,18 @@ fn draw(app: &mut App) -> Buffer {
     term.backend().buffer().clone()
 }
 
-fn dump(buf: &Buffer) -> String {
-    buffer_lines(buf).join("\n")
-}
-
 /// Asserts some rendered row contains `text`.
 fn assert_status(app: &mut App, text: &str) {
-    let buf = draw(app);
-    assert!(
-        buffer_lines(&buf).iter().any(|l| l.contains(text)),
-        "status `{text}` not found anywhere; buffer:\n{}",
-        dump(&buf)
-    );
-}
-
-fn items_hits(buf: &Buffer, text: &str) -> Vec<(u16, u16)> {
-    find_text(buf, text)
-        .into_iter()
-        .filter(|&(x, _)| (ITEMS_X_START..ITEMS_X_END).contains(&x))
-        .collect()
-}
-
-fn name_style(buf: &Buffer, name: &str) -> Style {
-    let (x, y) = *items_hits(buf, name)
-        .first()
-        .unwrap_or_else(|| panic!("`{name}` not found in items column; buffer:\n{}", dump(buf)));
-    let c = &buf[(x, y)];
-    (c.fg, c.bg, c.modifier)
+    common::assert_status(&draw(app), text);
 }
 
 fn assert_only_highlighted(app: &mut App, expected: &str) {
     let buf = draw(app);
-    let styles: Vec<(&str, Style)> = NAMES.iter().map(|n| (*n, name_style(&buf, n))).collect();
-    let others: Vec<&(&str, Style)> = styles.iter().filter(|(n, _)| *n != expected).collect();
-    let hl = styles.iter().find(|(n, _)| *n == expected).unwrap().1;
-    assert!(
-        others.iter().all(|(_, s)| *s == others[0].1),
-        "non-highlighted rows must share one style, got {styles:?}; buffer:\n{}",
-        dump(&buf)
-    );
-    assert_ne!(
-        hl,
-        others[0].1,
-        "`{expected}` must be the highlighted row, got {styles:?}; buffer:\n{}",
-        dump(&buf)
-    );
+    common::assert_only_highlighted(&buf, &NAMES, expected, |b, n| {
+        items_hits(b, n, ITEMS_X_START, ITEMS_X_END)
+            .first()
+            .copied()
+    });
 }
 
 #[test]
@@ -243,14 +198,10 @@ fn app_current_img1_cursor_img2(name: &str, sys: &FakeSystem) -> (App, PathBuf, 
 
 /// y rows of every `●` in the items column.
 fn mark_rows(buf: &Buffer) -> Vec<u16> {
-    items_hits(buf, "●").into_iter().map(|(_, y)| y).collect()
-}
-
-fn row_of(buf: &Buffer, name: &str) -> u16 {
-    items_hits(buf, name)
-        .first()
-        .unwrap_or_else(|| panic!("`{name}` not found in items column; buffer:\n{}", dump(buf)))
-        .1
+    items_hits(buf, "●", ITEMS_X_START, ITEMS_X_END)
+        .into_iter()
+        .map(|(_, y)| y)
+        .collect()
 }
 
 #[test]
@@ -265,7 +216,7 @@ fn done_job_moves_current_mark_to_wallpaper_in_file_and_does_not_move_cursor() {
     let buf = draw(&mut app);
     assert_eq!(
         mark_rows(&buf),
-        vec![row_of(&buf, "img1.png")],
+        vec![row_of(&buf, "img1.png", ITEMS_X_START, ITEMS_X_END)],
         "{}",
         dump(&buf)
     );
@@ -280,7 +231,7 @@ fn done_job_moves_current_mark_to_wallpaper_in_file_and_does_not_move_cursor() {
     let buf = draw(&mut app);
     assert_eq!(
         mark_rows(&buf),
-        vec![row_of(&buf, "img3.png")],
+        vec![row_of(&buf, "img3.png", ITEMS_X_START, ITEMS_X_END)],
         "exactly one `●`, on the img3.png row (none on img1/img2); buffer:\n{}",
         dump(&buf)
     );
@@ -304,7 +255,7 @@ fn failed_job_does_not_reread_current_wallpaper() {
     let buf = draw(&mut app);
     assert_eq!(
         mark_rows(&buf),
-        vec![row_of(&buf, "img1.png")],
+        vec![row_of(&buf, "img1.png", ITEMS_X_START, ITEMS_X_END)],
         "`●` must stay on img1.png after a failed job; buffer:\n{}",
         dump(&buf)
     );
