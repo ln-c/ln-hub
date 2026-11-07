@@ -198,7 +198,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     containing `wallpaper_dr`.
   - `[keymap]\nquite = "x"` (unknown keymap key) → `Err(ConfigError::Parse(msg))` with `msg`
     containing `quite`.
-- Deferred to S5+: key-conflict validation (`quit = "j"`) together with an `Action` keymap table.
+- Deferred to S5+: key-conflict validation and an `Action` keymap table. Moved to S12.
 
 ### Slice 4
 - slice_id: S4-wallpaper-list
@@ -249,19 +249,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - A missing file → no `●`, and the highlight is on the first item.
   - (Review follow-up) A `current_wallpaper` path not in the list (e.g. same file name outside
     the wallpaper dir) → no `●`, highlight on the first item.
-- Review notes carried to later slices:
-  - S6: add `ThemePane::selected() -> Option<&Wallpaper>` (None on an empty list), route `j`/`k`
-    to the focused column, and re-read `current_wallpaper` after a job is `Done` so `●` moves.
-  - S6: `App` will dispatch both `handle_key` and items render per `Module`; replace the
-    `Module::Theme` `if` with one `match` (or a pane trait once a second pane exists, not before).
-  - The slice that adds `j`/`k` in items: pick up the S3.1 deferral (key-conflict validation and
-    an `Action` keymap table).
-  - If `current_wallpaper` is reloaded (S6 / `tick`), reuse one private load fn in `ThemePane`.
-  - S6 (`j`/`k` in items): add `ThemePane::move_cursor(delta)` that clamps against the list
-    length, so `App` never touches the cursor.
-  - Incidental `wallpaper::read_current` behavior (accepted, not yet pinned by tests): only the
-    line terminator (`\n`/`\r`) is stripped, so a path's own trailing spaces are kept; an empty or
-    non-UTF-8 file means no current wallpaper.
+- Carried notes: resolved, or moved to S10–S13 (audited 2026-11-07).
 
 ### Slice 6
 - slice_id: S6-apply-wallpaper
@@ -280,29 +268,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - (Review follow-up, S5 carry-over) Job `Done`, then `tick()` → `current_wallpaper` is
     re-read, so `●` moves to the applied wallpaper and the cursor stays put. `Failed` → no
     re-read.
-- Review notes carried to later slices:
-  - Keymap slice, before S12: there is no `h`/`k` in the module column and no arrow keys
-    (keymap table, line ~89/97). The S3.1 `Action` keymap and key-conflict deferral is still
-    open. The quit arm matches before everything else, so a typed `q` in the S12 filter would
-    quit. Route keys through `ThemePane::handle_key -> Option<PaneAction>` when items are
-    focused.
-  - Still deferred: the per-`Module` `match` (until a second pane exists).
-  - Spawn errors other than `NotFound` read `ln-themectl not found: …`, which is misleading.
-    Split them (e.g. `Failed to start ln-themectl: …`) behind a RED test.
-  - The status is never cleared, and `Enter` while a job is running is silently ignored.
-  - S9/S10: generalize `Apply` into one running-job → status-message type once a second job
-    kind exists.
-  - Before S7: extract `render_modules` / `render_status` from `App::render`.
-  - S8: make `"ln-themectl"` a const once font apply also uses it.
-  - Paths go to `spawn` via `to_string_lossy` (a limit of the `&[&str]` API).
-  - Tests: move the duplicated highlight helpers (`name_style`, `assert_only_highlighted`,
-    `items_hits`) into `tests/common`. Enter outside items focus and Enter on an empty list
-    are not yet pinned.
-  - Tests: `name_style` and `row_of` duplicate the items-cell lookup, so extract a `name_cell`
-    helper. `app_on_img2` and `app_current_img1_cursor_img2` share the `l`,`j` setup. Move
-    them to `tests/common` along with the helpers above.
-  - `ThemePane`'s private `load_current` only wraps `wallpaper::read_current`. Inline it
-    unless the reload path gains logic.
+- Carried notes: resolved, or moved to S10–S13 (audited 2026-11-07).
 
 ### Slice 7
 - slice_id: S7-preview-meta
@@ -317,28 +283,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - (Review follow-up) Sizes are `ls -h` style and round up: 10 → `10`, 1500 → `1.5K`,
     1025 → `1.1K`, 10240 → `10K`, 1048576 → `1.0M`. An image shows `image` and no
     `thumb:`. The preview is empty until items are focused, and also when the list is empty.
-- Review notes carried to later slices:
-  - S13 (bin loop): `src/main.rs` never calls `App::tick` and redraws only on a key event, so
-    in the real binary an apply stays on `Applying…` and `●` never moves. The loop must use
-    `event::poll(timeout)` and then `tick()` + redraw. When adding it, stop `render_preview`
-    calling `fs::metadata` on every frame: capture `size` once in `discover` (on `Wallpaper`)
-    or cache it in `ThemePane`.
-  - S8/S9 (second pane): replace the `items_focused && theme_focused()` branch in
-    `App::render`, and the `Block`s that `App` passes into `ThemePane::render` and
-    `render_preview`, with one pane call per module that owns its titles and placeholders,
-    e.g. `ThemePane::render(f, items_area, preview_area)`. This supersedes the S6 note
-    "extract `render_modules` / `render_status`". Do those extractions only when a slice next
-    touches those regions.
-  - When a second consumer appears: move `human_size` and `preview_lines` out of
-    `theme_pane.rs` into a small `preview.rs`. A `Kind::label()` is a candidate at the same
-    time.
-  - Unpinned: when `fs::metadata` fails (e.g. a broken symlink), the size line is silently
-    omitted.
-  - Unpinned: the unit rollover in `human_size` (e.g. 1048575 bytes → `1.0M`, not `1024K`).
-    Pin it if the sizing code is touched again.
-  - Optional nits: `preview_lines` could return the joined text (or `Vec<Line>`) instead of a
-    `Vec<String>` that `render_preview` joins; the `tests/s7_preview.rs` interior-rows comment
-    near `empty_list_preview_is_blank` slightly misdescribes the slice it takes.
+- Carried notes: resolved, or moved to S10–S13 (audited 2026-11-07).
 
 ### Slice 8
 - slice_id: S8-font
@@ -366,22 +311,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     - The prompts are labelled `Font name:` / `Font size:`.
     - Font jobs show `Applying font size 18…` / `Applied font size 18` (and the same for `font name`).
     - The font line is hidden until the items column is focused.
-- Review notes carried to later slices:
-  - Before S12: route `f` / `s` and the prompt through the Theme pane (`Prompt`,
-    `handle_prompt_key`, `submit_prompt` are Theme concerns living in `App`). This joins the
-    S6 `PaneAction` note.
-  - When a third prompt appears (the S12 filter): make `Prompt` a `{ kind, text }` struct to
-    end the repeated `FontName | FontSize` switch. Build the themectl args and status label
-    from one `Prompt::command()` instead of stating the value twice in `submit_prompt`. If
-    editing grows (cursor, paste), extract a `TextInput`.
-  - S9: the font line is not pinned for a non-Theme module. Pin it when the second pane lands.
-    Also pin what an open prompt does when `tick` finishes a job.
-  - `font.rs` `env_value`: a duplicate `hl.env` key resolves to the first line, which is
-    unpinned. Exact `hl.env("K", "v")` spacing is required and escapes are not handled. That
-    is fine for a file `ln-themectl` writes.
-  - `parse_size` accepts `+16`, which is harmless because the size is re-serialised.
-  - The S6 spawn-error wording note (`ln-themectl not found: …` for every error) now also
-    covers font spawns.
+- Carried notes: resolved, or moved to S10–S13 (audited 2026-11-07).
 
 ### Slice 9
 - slice_id: S9-monitor-list
@@ -401,18 +331,7 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - `f`, `s` and Enter do nothing on Monitors.
   - Carried from S8: an open prompt survives `tick` finishing a job. The `Applied …` status
     shows after Esc. The font line is absent on Monitors.
-- notes carried to later slices:
-  - S10: `theme_focused()` / `theme_active` / `in_items` duplicate `focused_module()`. Use
-    `focused_module() == Some(Module::Theme)` as the single focus check.
-  - S10: `MonitorsPane` uses `Some(vec![])` for both "not loaded" and "no monitors". Switch to
-    a `Loaded | Unavailable` enum if a `No monitors` message is needed. One entry missing a
-    field makes the whole list unavailable. An empty `[]` shows a blank list (unpinned).
-  - Sticky focus: `j` in the Monitors items falls through to the module column. With
-    Monitors listed before Theme, this would show Theme items without `focus_items`.
-    Unpinned; revisit with `h` / focus handling.
-  - Rows are wider than the 80-column items interior (18 cells) and get truncated. The tests
-    draw at 120x24.
-  - Third pane: consider a `Pane` trait. With two panes, a `match` is enough.
+- Carried notes: resolved, or moved to S10–S13 (audited 2026-11-07).
 
 ### Slice 10
 - slice_id: S10-monitor-toggle
@@ -427,6 +346,30 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - Only `eDP-1` on; `Enter` on `eDP-1` → no spawn, and the status shows
     `Refusing to disable the last enabled monitor`.
   - The job is `Done`, then `tick()` → `hyprctl monitors all -j` is called again.
+- Carried notes (from S5–S9; audited 2026-11-07):
+  - (S9) Use one focus check. `theme_focused()`, `theme_active` and `in_items` duplicate
+    `focused_module()`, so use `focused_module() == Some(Module::Theme)`. The monitor cursor
+    and Enter need the same check for Monitors.
+  - (S9) `MonitorsPane` uses `Some(vec![])` for both "not loaded" and "no monitors". Switch to
+    a `Loaded | Unavailable` enum if a `No monitors` message is needed. Unpinned so far:
+    - one entry missing a field makes the whole list unavailable;
+    - an empty `[]` shows a blank list.
+  - (S6) Generalise `Apply` into one running-job → status-message type, now that a second job
+    kind (`ln-monitorctl`) exists.
+  - (S6/S8) Every spawn error reads `ln-themectl not found: …`, which is misleading for
+    errors other than `NotFound`. Split the wording (e.g. `Failed to start <prog>: …`) behind
+    a RED test. This also applies to the new `ln-monitorctl` spawn.
+  - (S6) The status is never cleared, and Enter while a job is running is silently ignored.
+    Decide both here, because Enter gains a second meaning.
+  - (S6) Unpinned: Enter with items unfocused (in the module column) and Enter on an empty
+    wallpaper list. Enter on Monitors before S10 was pinned as a no-op in S9 and is now
+    replaced by the toggle.
+  - (S6, tests) Move the duplicated test helpers into `tests/common`:
+    - `items_hits`, now in s4, s4_1, s5 and s6;
+    - `name_style` and `assert_only_highlighted`, in s5 and s6;
+    - `row_of` together with a `name_cell` helper;
+    - the shared `l`,`j` setup in `app_on_img2` and `app_current_img1_cursor_img2`.
+    Do this when s10 needs a highlight or row lookup.
 
 ### Slice 11
 - slice_id: S11-palette-live
@@ -439,6 +382,9 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - Rewrite the file with `color4='#112233'` and a newer mtime, then `tick()` → the highlight bg
     is `Rgb(0x11,0x22,0x33)`.
   - A missing or invalid `colors.sh` → the built-in fallback palette is used. No panic.
+- Carried notes (from S6; audited 2026-11-07):
+  - (S6) `ThemePane`'s private `load_current` only wraps `wallpaper::read_current`. Inline it
+    unless the reload path gains logic. Decide when `tick` gains palette reload.
 
 ### Slice 12
 - slice_id: S12-filter
@@ -451,6 +397,22 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     rendered.
   - `Esc` → all 3 are rendered again.
   - The filter is case-insensitive: `FRI` also matches.
+- Carried notes (from S3.1–S9; audited 2026-11-07). Do the keymap work before the filter:
+  - (S3.1/S5/S6) Add an `Action` keymap table with key-conflict validation (`quit = "j"`). The
+    module column has no `h`/`k` and there are no arrow keys (keymap table, line ~89/97).
+  - (S6) The quit arm matches first, so a `q` typed into the filter would quit. Open prompts
+    already take priority (pinned in S8). The filter must work the same way.
+  - (S6/S8) Route keys through `ThemePane::handle_key -> Option<PaneAction>` while items are
+    focused. Move `f`/`s` and the prompt (`Prompt`, `handle_prompt_key`, `submit_prompt`)
+    out of `App` into the Theme pane.
+  - (S8) The filter is the third prompt. Make `Prompt` a `{ kind, text }` struct to end the
+    `FontName | FontSize` switch, and build the themectl args and status label from one
+    `Prompt::command()`. If editing grows (cursor, paste), extract a `TextInput`.
+  - (S9) Sticky focus: `j` in the Monitors items falls through to the module column. With
+    Monitors listed before Theme, this would show Theme items without `focus_items`. Fix it
+    together with `h` / focus handling.
+  - (S9) Consider a `Pane` trait if the filter needs dispatch across panes. With two panes, a
+    `match` is enough.
 
 ### Slice 13
 - slice_id: S13-bin
@@ -468,3 +430,27 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     - startup to first frame under 50 ms (`hyperfine`-style);
     - sixel preview visible in foot;
     - applying a wallpaper restarts waybar and keeps the UI responsive.
+- Carried notes (from S5–S9; audited 2026-11-07):
+  - (S7) The bin loop: `src/main.rs` never calls `App::tick` and redraws only on a key event,
+    so in the real binary an apply stays on `Applying…`, `●` never moves, and the monitor
+    list never refreshes. Use `event::poll(timeout)`, then `tick()` and redraw.
+  - (S7) Stop `render_preview` calling `fs::metadata` on every frame. Capture `size` once in
+    `discover` (on `Wallpaper`) or cache it in `ThemePane`.
+  - (S7) The sixel preview is the second consumer of `human_size` / `preview_lines`. Move them
+    into a small `preview.rs`, and consider a `Kind::label()` at the same time. Optional
+    nits:
+    - `preview_lines` could return the joined text or a `Vec<Line>`;
+    - the interior-rows comment in `tests/s7_preview.rs` near `empty_list_preview_is_blank`
+      slightly misdescribes the slice it takes.
+  - (S9) Monitor rows are wider than the 18-cell items interior at 80 columns and get
+    truncated. The tests draw at 120x24. Check this in foot.
+  - (S6) Paths go to `spawn` via `to_string_lossy`, a limit of the `&[&str]` API.
+  - Accepted, unpinned behaviour. Pin each item if its code is touched again:
+    - (S5) `wallpaper::read_current` strips only the line terminator, so a path keeps its own
+      trailing spaces. An empty or non-UTF-8 file means no current wallpaper.
+    - (S7) When `fs::metadata` fails (e.g. a broken symlink), the size line is omitted.
+    - (S7) The unit rollover in `human_size`: 1048575 bytes → `1.0M`, not `1024K`.
+    - (S8) In `font.rs` `env_value`, a duplicate `hl.env` key resolves to the first line. The
+      exact `hl.env("K", "v")` spacing is required and escapes are not handled. That is fine
+      for a file `ln-themectl` writes.
+    - (S8) `parse_size` accepts `+16`, which is harmless because the size is re-serialised.
