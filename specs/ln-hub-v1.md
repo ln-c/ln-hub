@@ -298,6 +298,11 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - Tests: move the duplicated highlight helpers (`name_style`, `assert_only_highlighted`,
     `items_hits`) into `tests/common`. Enter outside items focus and Enter on an empty list
     are not yet pinned.
+  - Tests: `name_style` and `row_of` duplicate the items-cell lookup, so extract a `name_cell`
+    helper. `app_on_img2` and `app_current_img1_cursor_img2` share the `l`,`j` setup. Move
+    them to `tests/common` along with the helpers above.
+  - `ThemePane`'s private `load_current` only wraps `wallpaper::read_current`. Inline it
+    unless the reload path gains logic.
 
 ### Slice 7
 - slice_id: S7-preview-meta
