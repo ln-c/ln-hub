@@ -284,9 +284,16 @@ pub fn assert_only_highlighted(
         "non-highlighted rows must share one style, got {styles:?}; buffer:\n{}",
         dump(buf)
     );
+    // With no other rows to compare against, "highlighted" means the row carries some style
+    // beyond the unstyled default.
+    let baseline: CellStyle =
+        others
+            .first()
+            .map(|(_, s)| *s)
+            .unwrap_or((Color::Reset, Color::Reset, Modifier::empty()));
     assert_ne!(
         hl,
-        others[0].1,
+        baseline,
         "`{expected}` must be the highlighted row (style must differ from the others), got {styles:?}; buffer:\n{}",
         dump(buf)
     );
