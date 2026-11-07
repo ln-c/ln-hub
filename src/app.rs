@@ -4,10 +4,10 @@ use ratatui::Frame;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::Line;
-use ratatui::widgets::{Block, List, ListItem, ListState, Paragraph};
+use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Padding, Paragraph};
 
 use crate::config::{Config, Module};
-use crate::monitor::MonitorsPane;
+use crate::monitor::{MonitorsPane, Popup};
 use crate::palette::LivePalette;
 use crate::pane::{Action, PaneAction, Program, TOP_PREFIX};
 use crate::system::{JobId, JobState, System};
@@ -50,6 +50,8 @@ pub struct App {
     top_pending: bool,
     /// The image offered by the last `render`.
     preview_image: Option<PreviewImage>,
+    /// The open monitor popup; it takes every key before the keymap.
+    popup: Option<Popup>,
     quit: bool,
 }
 
@@ -72,11 +74,21 @@ impl App {
             status: None,
             top_pending: false,
             preview_image: None,
+            popup: None,
             quit: false,
         }
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
+        if let Some(popup) = self.popup.take() {
+            match key.code {
+                KeyCode::Enter if popup.confirm.is_some() => self.run(popup.confirm),
+                KeyCode::Esc => {}
+                KeyCode::Char(c) if c == self.quit_key => {}
+                _ => self.popup = Some(popup),
+            }
+            return;
+        }
         if self.theme.prompt_open() {
             let idle = self.job.is_none();
             let pane_action = self.theme.handle_prompt_key(key.code, idle);
@@ -140,6 +152,10 @@ impl App {
                 self.selected = self.selected.saturating_sub(1);
                 None
             }
+            (Some(Module::Monitors), Action::Apply) => {
+                self.popup = self.monitors.popup(self.job.is_some());
+                None
+            }
             (Some(_), Action::Apply) if self.job.is_some() => None,
             (Some(Module::Theme), action) => self.theme.handle(action),
             (Some(Module::Monitors), action) => self.monitors.handle(action),
@@ -173,7 +189,7 @@ impl App {
 
     /// The image to draw over the Preview block, as of the last `render`.
     pub fn preview_image(&self) -> Option<PreviewImage> {
-        self.preview_image.clone()
+        self.preview_image.clone().filter(|_| self.popup.is_none())
     }
 
     pub fn render(&mut self, f: &mut Frame) {
@@ -213,6 +229,10 @@ impl App {
         };
 
         self.render_status(f, status_area, theme_active);
+        if let Some(popup) = &self.popup {
+            self.preview_image = None;
+            render_popup(f, main_area, popup);
+        }
     }
 
     /// The status row: the open prompt or the status message on the left, and the font summary
@@ -284,4 +304,33 @@ impl App {
             Err(e) => self.status = Some(format!("Failed to start {prog}: {e}")),
         }
     }
+}
+
+/// Draws the popup centred over `area`, over a cleared box just wide enough for its text.
+fn render_popup(f: &mut Frame, area: Rect, popup: &Popup) {
+    let text_width = popup
+        .lines
+        .iter()
+        .map(|l| Line::from(l.as_str()).width())
+        .max();
+    let width = u16::try_from(text_width.unwrap_or(0) + 4).unwrap_or(u16::MAX);
+    let height = u16::try_from(popup.lines.len() + 2).unwrap_or(u16::MAX);
+    let [_, row, _] = Layout::vertical([
+        Constraint::Fill(1),
+        Constraint::Length(height.min(area.height)),
+        Constraint::Fill(1),
+    ])
+    .areas(area);
+    let [_, box_area, _] = Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Length(width.min(area.width)),
+        Constraint::Fill(1),
+    ])
+    .areas(row);
+    let lines: Vec<Line> = popup.lines.iter().map(|l| Line::from(l.as_str())).collect();
+    f.render_widget(Clear, box_area);
+    f.render_widget(
+        Paragraph::new(lines).block(Block::bordered().padding(Padding::horizontal(1))),
+        box_area,
+    );
 }

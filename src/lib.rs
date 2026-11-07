@@ -8,6 +8,7 @@ mod palette;
 mod pane;
 mod proc;
 mod system;
+pub mod term_query;
 mod theme_pane;
 mod wallpaper;
 
