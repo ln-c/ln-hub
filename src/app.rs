@@ -67,7 +67,10 @@ impl App {
         };
         match self.sys.poll(apply.job) {
             JobState::Running => self.apply = Some(apply),
-            JobState::Done => self.status = Some(format!("Applied {}", apply.name)),
+            JobState::Done => {
+                self.theme.reload_current();
+                self.status = Some(format!("Applied {}", apply.name));
+            }
             JobState::Failed(reason) => self.status = Some(format!("Apply failed: {reason}")),
         }
     }
