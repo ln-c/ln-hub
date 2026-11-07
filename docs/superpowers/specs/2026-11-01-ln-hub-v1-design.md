@@ -190,7 +190,7 @@ Slices S0–S18 are archived one file per slice under `docs/superpowers/plans/ar
 | S17-help-status-overlap | The right-aligned `Font:` status never overprints the help line or other left status text | [s17-help-status-overlap.md](../plans/archive/ln-hub-v1/s17-help-status-overlap.md) | green |
 | S18-review-followups | S14/S15 review follow-ups: sturdier pty tests, sixel-reply pty test, popup and query-thread refactors | [s18-review-followups.md](../plans/archive/ln-hub-v1/s18-review-followups.md) | green |
 | S19-popup-tidy | `Popup::new` with private fields, a narrow `Confirm` payload, no unreachable arm (refactor, no behavior change) | [plan, Task 2](../plans/2026-11-07-s19-s24-followups.md) | todo |
-| S20-test-rustfmt | `cargo fmt --check` exits 0 again (five layout hunks in two test files) | [plan, Task 1](../plans/2026-11-07-s19-s24-followups.md) | todo |
+| S20-test-rustfmt | `cargo fmt --check` exits 0 again (five layout hunks in two test files) | [plan, Task 1](../plans/2026-11-07-s19-s24-followups.md) | green |
 | S21-pty-helper-dedup | The pty tests share one `find` / `wait_for` / `fail` in `tests/common/pty.rs` | [plan, Task 3](../plans/2026-11-07-s19-s24-followups.md) | todo |
 | S22-sixel-off-ui-thread | Sixel resize+encode on a worker thread (`ThreadProtocol`); opt-in `LN_HUB_TIMING` log | [plan, Task 4](../plans/2026-11-07-s19-s24-followups.md) | todo |
 | S23-evidence-lfs | VM evidence PNGs move to Git LFS (one new commit, no history rewrite) | [plan, Task 5](../plans/2026-11-07-s19-s24-followups.md) | todo |

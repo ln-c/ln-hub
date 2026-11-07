@@ -175,7 +175,10 @@ fn first_key_clears_ready_and_the_quit_key_still_quits() {
     app.init_finished(Instant::now());
     assert!(!app.should_quit());
     press(&mut app, 'q');
-    assert!(app.should_quit(), "the quit key must be handled, not swallowed by Ready");
+    assert!(
+        app.should_quit(),
+        "the quit key must be handled, not swallowed by Ready"
+    );
     assert_nowhere(&mut app, READY);
 }
 

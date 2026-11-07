@@ -57,15 +57,15 @@ fn status_row(app: &mut App, w: u16) -> (String, String) {
 /// `expected.len() == w` cells), and so holds no stray part of `F` or of the left text.
 fn assert_row_is(app: &mut App, w: u16, expected: &str) {
     let (row, dump) = status_row(app, w);
-    assert_eq!(
-        row, expected,
-        "status row at {w} columns; buffer:\n{dump}"
-    );
+    assert_eq!(row, expected, "status row at {w} columns; buffer:\n{dump}");
 }
 
 /// Asserts the row at `w` is `left` clipped/padded by blanks to the width, with no `Font:` in it.
 fn assert_left_only(app: &mut App, w: u16, left: &str) {
-    let padded = format!("{left}{}", spaces((w as usize).saturating_sub(left.chars().count())));
+    let padded = format!(
+        "{left}{}",
+        spaces((w as usize).saturating_sub(left.chars().count()))
+    );
     assert_row_is(app, w, &padded);
 }
 
@@ -78,8 +78,14 @@ fn help_at_80_columns_is_whole_and_font_is_hidden() {
     press(&mut app, '?');
     assert_left_only(&mut app, 80, H);
     let (row, dump) = status_row(&mut app, 80);
-    assert!(row.ends_with("q quit"), "row `{row}` must end with `q quit`; buffer:\n{dump}");
-    assert!(!row.contains("Font:"), "no `Font:` in the row `{row}`; buffer:\n{dump}");
+    assert!(
+        row.ends_with("q quit"),
+        "row `{row}` must end with `q quit`; buffer:\n{dump}"
+    );
+    assert!(
+        !row.contains("Font:"),
+        "no `Font:` in the row `{row}`; buffer:\n{dump}"
+    );
 }
 
 #[test]
@@ -215,11 +221,7 @@ fn a_prompt_that_just_fits_next_to_font_keeps_it_with_one_blank() {
     for _ in 0..39 {
         press(&mut app, 'x');
     }
-    assert_row_is(
-        &mut app,
-        80,
-        &format!("Font name: {} {F}", "x".repeat(39)),
-    );
+    assert_row_is(&mut app, 80, &format!("Font name: {} {F}", "x".repeat(39)));
 }
 
 #[test]
