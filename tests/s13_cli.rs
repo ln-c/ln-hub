@@ -97,7 +97,11 @@ fn config_flag_with_unknown_module_reports_it_exit_2() {
     let cfg = write_file(&home, "c.toml", "modules = [\"Audio\"]\n");
     let r = run_cli(&["--config", cfg.to_str().unwrap()], &home);
     assert_eq!(r.code, Some(2), "stderr: {}", r.stderr);
-    assert!(r.stderr.contains("unknown module: Audio"), "stderr: {}", r.stderr);
+    assert!(
+        r.stderr.contains("unknown module: Audio"),
+        "stderr: {}",
+        r.stderr
+    );
 }
 
 #[test]
@@ -109,7 +113,11 @@ fn default_config_path_under_home_is_read() {
     write_file(&dir, "config.toml", "modules = [\"Audio\"]\n");
     let r = run_cli(&[], &home);
     assert_eq!(r.code, Some(2), "stderr: {}", r.stderr);
-    assert!(r.stderr.contains("unknown module: Audio"), "stderr: {}", r.stderr);
+    assert!(
+        r.stderr.contains("unknown module: Audio"),
+        "stderr: {}",
+        r.stderr
+    );
 }
 
 #[test]
