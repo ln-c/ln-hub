@@ -26,8 +26,8 @@ enum OnDone {
 }
 
 /// A job that has been spawned and not yet observed as finished.
-struct Apply {
-    job: JobId,
+struct Job {
+    id: JobId,
     /// What the job changes, as shown in the status bar: `img2.png`, `font name X`, `DP-1 off`.
     name: String,
     on_done: OnDone,
@@ -55,7 +55,7 @@ impl Prompt {
 }
 
 /// Top-level application state: the module column and its selection, the Theme items pane,
-/// the in-flight apply, the open prompt, the status bar message, and the quit flag.
+/// the in-flight job, the open prompt, the status bar message, and the quit flag.
 pub struct App {
     modules: Vec<Module>,
     quit_key: char,
@@ -64,7 +64,7 @@ pub struct App {
     sys: Box<dyn System>,
     items_focused: bool,
     selected: usize,
-    apply: Option<Apply>,
+    job: Option<Job>,
     prompt: Option<Prompt>,
     status: Option<String>,
     quit: bool,
@@ -84,7 +84,7 @@ impl App {
             sys,
             items_focused: false,
             selected: 0,
-            apply: None,
+            job: None,
             prompt: None,
             status: None,
             quit: false,
@@ -98,20 +98,22 @@ impl App {
         }
         let focused = self.focused_module();
         let in_theme = focused == Some(Module::Theme);
+        let in_monitors = focused == Some(Module::Monitors);
+        let idle = self.job.is_none();
         match key.code {
             KeyCode::Char(c) if c == self.quit_key => self.quit = true,
             KeyCode::Char('j') if in_theme => self.theme.move_cursor(1),
             KeyCode::Char('k') if in_theme => self.theme.move_cursor(-1),
-            KeyCode::Char('j') if focused == Some(Module::Monitors) => self.monitors.move_cursor(1),
-            KeyCode::Char('k') if focused == Some(Module::Monitors) => {
+            KeyCode::Char('j') if in_monitors => self.monitors.move_cursor(1),
+            KeyCode::Char('k') if in_monitors => {
                 self.monitors.move_cursor(-1);
             }
             KeyCode::Char('j') if self.selected + 1 < self.modules.len() => self.selected += 1,
             KeyCode::Char('l') => self.focus_items(),
             KeyCode::Char('f') if in_theme => self.prompt = Some(Prompt::FontName(String::new())),
             KeyCode::Char('s') if in_theme => self.prompt = Some(Prompt::FontSize(String::new())),
-            KeyCode::Enter if in_theme && self.apply.is_none() => self.apply_selected(),
-            KeyCode::Enter if focused == Some(Module::Monitors) && self.apply.is_none() => {
+            KeyCode::Enter if in_theme && idle => self.apply_selected(),
+            KeyCode::Enter if in_monitors && idle => {
                 self.toggle_selected_monitor();
             }
             _ => {}
@@ -122,19 +124,19 @@ impl App {
         self.quit
     }
 
-    /// Polls the in-flight apply; once it has finished, reports the outcome and releases the job.
+    /// Polls the in-flight job; once it has finished, reports the outcome and releases the job.
     pub fn tick(&mut self) {
-        let Some(apply) = self.apply.take() else {
+        let Some(job) = self.job.take() else {
             return;
         };
-        match self.sys.poll(apply.job) {
-            JobState::Running => self.apply = Some(apply),
+        match self.sys.poll(job.id) {
+            JobState::Running => self.job = Some(job),
             JobState::Done => {
-                match apply.on_done {
+                match job.on_done {
                     OnDone::ReloadTheme => self.theme.reload(),
                     OnDone::ReloadMonitors => self.monitors.load(self.sys.as_ref()),
                 }
-                self.status = Some(format!("Applied {}", apply.name));
+                self.status = Some(format!("Applied {}", job.name));
             }
             JobState::Failed(reason) => self.status = Some(format!("Apply failed: {reason}")),
         }
@@ -228,7 +230,7 @@ impl App {
     /// Enter in a prompt: closes it and spawns the font change. While another job is in flight,
     /// the prompt stays open with its text.
     fn submit_prompt(&mut self) {
-        if self.apply.is_some() {
+        if self.job.is_some() {
             return;
         }
         let Some(prompt) = self.prompt.take() else {
@@ -254,9 +256,9 @@ impl App {
     /// Spawns `prog` with `args` as the in-flight job, labelled `name` in the status bar.
     fn spawn_job(&mut self, prog: &str, args: &[&str], name: String, on_done: OnDone) {
         match self.sys.spawn(prog, args) {
-            Ok(job) => {
+            Ok(id) => {
                 self.status = Some(format!("Applying {name}…"));
-                self.apply = Some(Apply { job, name, on_done });
+                self.job = Some(Job { id, name, on_done });
             }
             Err(e) if e.kind() == ErrorKind::NotFound => {
                 self.status = Some(format!("{prog} not found: {e}"));
