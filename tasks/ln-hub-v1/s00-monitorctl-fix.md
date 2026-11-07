@@ -1,10 +1,13 @@
 ---
 spec: ../../specs/ln-hub-v1.md
 slice_id: S0-monitorctl-fix
-status: green
+status: unverified
 ---
 
 ### Slice 0 (dotfiles prerequisite)
+
+Unverified (2026-11-07): bats tests not yet run; VM image's ~/.local/bin/ln-monitorctl predates the fix (seen in the S13 re-run).
+
 - slice_id: S0-monitorctl-fix
 - behavior: `ln-monitorctl <name> on|off` accepts any listed monitor, not only the first one, and
   exits 0 on success. `ini` exits 0. Comparisons are numeric.

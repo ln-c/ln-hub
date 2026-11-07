@@ -59,3 +59,8 @@ status: green
     arrived and the input has gone idle. The deadline is the upper bound.
   - The timing tests allow slack: `q` is sent at ~300 ms, i.e. after the 250 ms deadline plus
     scheduling margin.
+
+- Manual VM evidence (2026-11-07): silent terminal falls back to halfblocks with no freeze and `q`
+  quits on the first press, foot keeps sixel; keys inside the 250 ms window of a silent terminal
+  are dropped by design. Screenshots in `tests/manual/s14/`, notes in the "Manual VM re-run" block
+  of `s13-bin.md`.

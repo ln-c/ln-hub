@@ -47,3 +47,7 @@ status: green
     cheap insurance (the field is only rewritten by `render`); it keeps the rule explicit for
     a later popup elsewhere.
   - Not in scope: a width-adaptive column, scrolling the row, or a popup for the Theme pane.
+
+- Manual VM evidence (2026-11-07): popup at 80 columns, refusal path, Esc/q close, and a real
+  off/on toggle with a second headless output. Screenshots in `tests/manual/s15/`, notes in the
+  "Manual VM re-run" block of `s13-bin.md`.

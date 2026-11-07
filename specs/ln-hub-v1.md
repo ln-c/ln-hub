@@ -133,7 +133,7 @@ Each slice lives in its own file under `tasks/ln-hub-v1/` (front matter links ba
 
 | slice | behavior | file | status |
 |---|---|---|---|
-| S0-monitorctl-fix | ln-monitorctl accepts any listed monitor and exits 0 (dotfiles prerequisite) | [s00-monitorctl-fix.md](../tasks/ln-hub-v1/s00-monitorctl-fix.md) | green |
+| S0-monitorctl-fix | ln-monitorctl accepts any listed monitor and exits 0 (dotfiles prerequisite) | [s00-monitorctl-fix.md](../tasks/ln-hub-v1/s00-monitorctl-fix.md) | unverified |
 | S1-shell-tracer | Three-column shell; module column lists Theme and Monitors; `q` quits | [s01-shell-tracer.md](../tasks/ln-hub-v1/s01-shell-tracer.md) | green |
 | S2-palette-parse | Palette parsed from wallust `colors.sh` | [s02-palette-parse.md](../tasks/ln-hub-v1/s02-palette-parse.md) | green |
 | S3-config | `config.toml` overrides paths, module order/visibility and keys | [s03-config.md](../tasks/ln-hub-v1/s03-config.md) | green |

@@ -138,12 +138,12 @@ status: green
   - 7 PASS, fits at 80, truncates below; note reworded: at 80 columns the help line with quit key
     `q` is exactly 80 characters and shows in full, `tests/manual/s13/07-help-80col.png`. At 70
     columns it ends at `?`, `tests/manual/s13/07b-help-70col-truncates.png`.
-  - 8 NEEDS USER CONFIRMATION: second output via `hyprctl output create headless`, 2 rows. At 80
+  - 8 NEEDS USER CONFIRMATION (superseded: S15 popup, re-run item 2 below): second output via `hyprctl output create headless`, 2 rows. At 80
     columns the items column is 19 wide and cuts the S9 rows `<name>  <w>x<h>@<hz>  on|off`
     to `Virtual-1  1268x13` and `HEADLESS-1  1920x1`; the `@hz` and `on/off` state is lost, and
     the preview pane is empty. `tests/manual/s13/08-monitors-80col.png`. S9 pins the row text
     but not its width, so whether this is acceptable is a design call.
-  - 9 FAIL (bug): terminal that never answers the picker query (python pty, 24x80, no sixel
+  - 9 FAIL (bug; superseded: S14 fix, re-run item 1 below): terminal that never answers the picker query (python pty, 24x80, no sixel
     support). First frame is drawn at 2.0 ms, then the UI is frozen for about 2 s (picker
     query timeout, `Picker::from_query_stdio`), then falls back to halfblocks. It does not hang
     for good, but the freeze eats keys and the first key after it. `q` sent at 0.2 s, 1.0 s and 2.2 s were all lost; `q` at 3.0 s was lost and
@@ -152,3 +152,75 @@ status: green
     3.0 / 3.5 s, `q` at 5.5 s exited rc 0). Cause: the picker query runs on the main thread
     before the loop and leaves a stdin reader thread that takes the next key. Not run with
     `ssh -tt`.
+
+- Manual VM re-run (2026-11-07, after S14/S15): HEAD 94c772f (release build made in the guest from a
+  tar copy sent over ssh; nothing was put under `~/git/dotfiles`). Fresh snapshot VM, Hyprland
+  0.56.2 (QEMU virtio display, one output `Virtual-1` 1280x800), foot 1.28.0, floating
+  foot 990x660 px = 24x80 (checked with `stty size`). Same wallpaper set as the first run (12 big
+  jpg, 3 png, 3 small jpg). `ln-monitorctl` was taken from the mounted dotfiles repo
+  (`PATH=~/git/dotfiles/.local/bin:$PATH`, read only), because the guest image's own copy
+  predates the S0 fix and fails with two outputs. The silent terminal is a small python pty proxy
+  (`/tmp/silentproxy.py` in the guest) run inside foot: it strips DA1, kitty, `CSI 16t` queries
+  from ln-hub's output so foot never answers, and forwards keys; it timestamps events and can
+  inject keys. Screenshots: `tests/manual/s14/` (query checks, regression) and
+  `tests/manual/s15/` (popup).
+  - 1a PASS (with one documented limit), silent terminal: first frame at 3 ms, the loop keeps
+    drawing every 50-100 ms through the query window (no output gap above ~100 ms), the window
+    ends at 255 ms, preview falls back to halfblocks
+    (`tests/manual/s14/00-silent-baseline-halfblocks.png`). Seven keys injected from 300 ms on
+    (`l k k k j k k`) were all handled, cursor on `wp_png_3.jpg` as expected, halfblocks preview:
+    `tests/manual/s14/01b-silent-keys-after-deadline-all-handled.png`. `j` at 300 ms then `q` at
+    400 ms: child exit 0 at 418 ms, first `q` press (log; `01c-silent-q-quits-first-press.png`
+    is the shell after exit). Real typing with `wtype l k k k j k k` right after the window
+    appeared (first key reached ln-hub at 395 ms, i.e. after the 250 ms window): all keys
+    handled, same cursor, halfblocks:
+    `tests/manual/s14/01d-silent-wtype-right-after-launch.png`. Limit: keys that arrive inside
+    the 250 ms window of a silent terminal are dropped, not replayed (S14 decision, key bytes in
+    the window are discarded). Six keys injected at 20-124 ms were all lost, only the `j` at 600 ms
+    moved the cursor (Monitors selected): `tests/manual/s14/01a-silent-keys-inside-250ms-window-dropped.png`.
+    The old failure (2 s freeze, `q` needing a 4 s wait, orphan reader eating a key) is gone.
+  - 1b PASS, foot: sixel detected (foot answers `CSI 6;26;12t` + DA1 with attribute 4 within
+    3 ms) and the preview is real sixel (smooth, not blocks):
+    `tests/manual/s14/02a-foot-sixel-after-quick-keys.png` (compare
+    `tests/manual/s13/02-sixel-visible.png`). `wtype l k k k j k k` right after launch: all
+    handled, cursor on `wp_png_3.png`. Probe with one `j` injected at 10, 60, 120, 200, 300 ms after
+    first output (pty proxy forwarding foot's answers): the 10 ms key was lost, 60 ms and later
+    were handled, so in foot the drop window is well under 60 ms (a human cannot hit it).
+  - 2 PASS S15 popup at 80 columns, one enabled monitor: column rows still truncate
+    (`Virtual-1  1280x80`, `tests/manual/s15/01-monitors-80col-rows-truncated.png`). `Enter` opens
+    a centred bordered popup with the full row `Virtual-1  1280x800@75  on` and
+    `Refusing to disable the last enabled monitor`:
+    `tests/manual/s15/02-popup-refusal-single-monitor.png`. Second `Enter` is silent, nothing
+    spawned: `03-popup-refusal-enter-silent.png`. `Esc` closes, no change:
+    `04-esc-closed-no-change.png`. `Enter` then `q` closes the popup and ln-hub stays running
+    (pgrep), `05-q-closes-popup-app-alive.png`; `q` again quits, `06-q-quits-after-popup-closed.png`.
+  - 2b PASS real toggle with a second output (`hyprctl output create headless` ->
+    `HEADLESS-1` 1920x1080): rows at 80 columns, `07-two-monitors-rows-80col.png`; `Enter` on
+    `HEADLESS-1` opens the popup `HEADLESS-1  1920x1080@60  on` / `HEADLESS-1 off`,
+    `08-popup-full-row-headless-off.png`; `Esc` closes, `hyprctl monitors all` still
+    `disabled: false` for both, `09-esc-closed-no-spawn.png`; `Enter`, `Enter`: after 0.45 s
+    `Applied HEADLESS-1 off` and `hyprctl` shows `HEADLESS-1 disabled: true`
+    (`10-confirm-applying.png` and `11-after-confirm-applied.png` both caught only the
+    result: the job is too fast for a screenshot). Then the popup on the disabled row shows
+    `HEADLESS-1  1920x1080@60  off` / `HEADLESS-1 on`, `12-popup-disabled-monitor-switch-on.png`;
+    confirm: `Applying HEADLESS-1 on…` caught in `13-confirm-on-applying.png`, then
+    `Applied HEADLESS-1 on` with hyprctl `disabled: false` in `14-confirm-on-applied.png`.
+    Not run: the "job running" popup (covered by the S15 tests; the toggle job is too short to
+    open a popup during it).
+  - 3 regression spot-check, nothing changed vs the first run: help line at 80 columns shows in
+    full, ends `q quit` (`tests/manual/s14/03a-reg-help-80col.png`); sixel on image
+    (`03b-reg-sixel-on-image.png`), gone on Monitors (`03c-reg-sixel-gone-on-monitors.png`),
+    redrawn on return (`03d-reg-sixel-redrawn-after-return.png`) and after `resize` larger
+    (`03e-reg-sixel-after-resize-larger.png`), smaller (`03f-reg-sixel-after-resize-smaller.png`)
+    and tiling (`03g-reg-sixel-after-tile.png`); apply wallpaper: waybar PID 3053 -> 4582,
+    `Applying wp_small_1.jpg…` (`04b-reg-applying.png`), `Applied wp_small_1.jpg` with the `●`
+    moved and the palette recoloured (`04d-reg-apply-applied.png`; before: `04a-reg-apply-before.png`).
+    Observation (not a regression check, not compared with s13): with focus in Items and the
+    help line open, the right-aligned `Font: ...` status overprints the end of the help line
+    (see 03b, 03e-03g).
+  - Environment limits: software-rendered virtual display, one real output plus one headless
+    output, Hyprland 0.56.2 (first run had 0.57.1), the many-large-images j/k burst (old item 4) was not repeated,
+    no `ssh -tt` run.
+  - Guest `ln-monitorctl` (image copy, Oct 9) fails with two outputs: its loop exits 1 on the
+    first non-matching monitor, so every toggle fails; the repo's fixed script (S0) works.
+    Rebuild the VM base image or run the toggle with the repo's `.local/bin` first in `PATH`.
