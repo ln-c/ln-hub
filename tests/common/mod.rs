@@ -24,6 +24,8 @@ pub struct FakeSystem {
     pub stdout: Arc<Mutex<Vec<(String, String)>>>,
     /// State returned by `poll` for every job. Default: Done.
     pub job_state: Arc<Mutex<JobState>>,
+    /// When set, `spawn` records the call then fails with this (kind, message). Default: None.
+    pub spawn_error: Arc<Mutex<Option<(io::ErrorKind, String)>>>,
 }
 
 impl FakeSystem {
@@ -34,7 +36,13 @@ impl FakeSystem {
             next_job: Arc::new(AtomicU64::new(1)),
             stdout: Arc::default(),
             job_state: Arc::new(Mutex::new(JobState::Done)),
+            spawn_error: Arc::default(),
         }
+    }
+
+    /// Makes every later `spawn` fail with `io::Error::new(kind, msg)`.
+    pub fn set_spawn_error(&self, kind: io::ErrorKind, msg: &str) {
+        *self.spawn_error.lock().unwrap() = Some((kind, msg.to_string()));
     }
 
     pub fn set_stdout(&self, prog: &str, out: &str) {
@@ -89,6 +97,9 @@ impl System for FakeSystem {
 
     fn spawn(&self, prog: &str, args: &[&str]) -> io::Result<JobId> {
         record(&self.spawns, prog, args);
+        if let Some((kind, msg)) = self.spawn_error.lock().unwrap().clone() {
+            return Err(io::Error::new(kind, msg));
+        }
         Ok(JobId(self.next_job.fetch_add(1, Ordering::SeqCst)))
     }
 

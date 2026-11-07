@@ -19,9 +19,16 @@ fn is_current(current: Option<&Path>, w: &Wallpaper) -> bool {
     current == Some(w.path.as_path())
 }
 
+/// Reads the applied wallpaper's path from `current_file`.
+fn load_current(current_file: &Path) -> Option<PathBuf> {
+    wallpaper::read_current(current_file)
+}
+
 pub(crate) struct ThemePane {
     wallpaper_dir: PathBuf,
     wallpapers: Vec<Wallpaper>,
+    /// File that records the applied wallpaper, re-read by `reload_current`.
+    current_file: PathBuf,
     /// Path of the applied wallpaper, marked with `●` when it is in the list.
     current: Option<PathBuf>,
     /// Index into `wallpapers` of the highlighted row; starts on the applied wallpaper.
@@ -31,7 +38,7 @@ pub(crate) struct ThemePane {
 impl ThemePane {
     pub(crate) fn new(wallpaper_dir: PathBuf, current_file: &Path) -> ThemePane {
         let wallpapers = wallpaper::discover(&wallpaper_dir);
-        let current = wallpaper::read_current(current_file);
+        let current = load_current(current_file);
         let cursor = wallpapers
             .iter()
             .position(|w| is_current(current.as_deref(), w))
@@ -39,9 +46,28 @@ impl ThemePane {
         ThemePane {
             wallpaper_dir,
             wallpapers,
+            current_file: current_file.to_path_buf(),
             current,
             cursor,
         }
+    }
+
+    /// Re-reads the applied wallpaper so the `●` mark moves; the cursor is left where it is.
+    pub(crate) fn reload_current(&mut self) {
+        self.current = load_current(&self.current_file);
+    }
+
+    /// The wallpaper under the cursor; `None` when the list is empty.
+    pub(crate) fn selected(&self) -> Option<&Wallpaper> {
+        self.wallpapers.get(self.cursor)
+    }
+
+    /// Moves the cursor by `delta` rows, clamped to the first and last wallpaper.
+    pub(crate) fn move_cursor(&mut self, delta: isize) {
+        let Some(last) = self.wallpapers.len().checked_sub(1) else {
+            return;
+        };
+        self.cursor = self.cursor.saturating_add_signed(delta).min(last);
     }
 
     /// Draws the pane inside `block`, which the caller has already styled for focus.
