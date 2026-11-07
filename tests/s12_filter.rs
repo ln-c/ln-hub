@@ -434,3 +434,86 @@ fn leaving_the_items_column_clears_the_filter() {
     assert_rendered(&mut app, &ABC, &ABC);
     assert!(!shows(&mut app, "Filter:"));
 }
+
+// ---- review fix round 1 ----
+
+#[test]
+fn reopening_the_filter_keeps_its_text_and_rows() {
+    // Catches: `/` reopening an empty prompt (dropping the kept text and widening the rows)
+    // instead of editing the existing filter text.
+    let (mut app, _sys, _dir) = focused("s12-reopen", &ABC);
+    press(&mut app, '/');
+    press(&mut app, 'b');
+    enter(&mut app);
+    press(&mut app, '/');
+    assert_shows(&mut app, "Filter: b");
+    assert_rendered(&mut app, &ABC, &["b1.png", "b2.png"]);
+    backspace(&mut app);
+    assert_shows(&mut app, "Filter: ");
+    assert_lacks(&mut app, "Filter: b");
+    assert_rendered(&mut app, &ABC, &ABC);
+}
+
+#[test]
+fn typing_after_reopening_continues_from_the_kept_text() {
+    // Catches: the reopened input starting from empty text. `b` + `1` leaves only b1.png, while
+    // `1` alone would also match a1.png and c1.png (and show `Filter: 1`).
+    let (mut app, _sys, _dir) = focused("s12-reopen-continue", &ABC);
+    press(&mut app, '/');
+    press(&mut app, 'b');
+    enter(&mut app);
+    press(&mut app, '/');
+    press(&mut app, '1');
+    assert_shows(&mut app, "Filter: b1");
+    assert_rendered(&mut app, &ABC, &["b1.png"]);
+    enter(&mut app);
+    assert_rendered(&mut app, &ABC, &["b1.png"]);
+}
+
+#[test]
+fn reopening_does_not_move_the_cursor_and_non_text_keys_change_nothing() {
+    // Catches: reopening or a non-text key (Down, Up, Tab) in the open input recomputing the
+    // filter and resetting the cursor to the first match (b1.png) instead of keeping b2.png.
+    let (mut app, _sys, _dir) = focused("s12-reopen-keys", &ABC);
+    press(&mut app, '/');
+    press(&mut app, 'b');
+    enter(&mut app);
+    press(&mut app, 'j');
+    assert_highlighted(&mut app, &["b1.png", "b2.png"], "b2.png");
+    press(&mut app, '/');
+    assert_highlighted(&mut app, &["b1.png", "b2.png"], "b2.png");
+    for code in [KeyCode::Down, KeyCode::Up, KeyCode::Tab] {
+        app.handle_key(key(code));
+        assert_rendered(&mut app, &ABC, &["b1.png", "b2.png"]);
+        assert_highlighted(&mut app, &["b1.png", "b2.png"], "b2.png");
+        assert_shows(&mut app, "Filter: b");
+    }
+}
+
+#[test]
+fn left_arrow_leaving_the_items_column_clears_the_filter() {
+    // GUARD (may already pass): Left unfocuses like `h`, so the filter must not survive it.
+    let (mut app, _sys, _dir) = focused("s12-leave-left", &ABC);
+    press(&mut app, '/');
+    press(&mut app, 'b');
+    enter(&mut app);
+    assert_rendered(&mut app, &ABC, &["b1.png", "b2.png"]);
+    app.handle_key(key(KeyCode::Left));
+    press(&mut app, 'l');
+    assert_rendered(&mut app, &ABC, &ABC);
+    assert!(!shows(&mut app, "Filter:"));
+}
+
+#[test]
+fn esc_after_zero_matches_restores_all_rows_and_highlights_the_first() {
+    // GUARD (may already pass): with no highlighted row to keep, Esc must fall back to the
+    // first row (pins the `unwrap_or(0)` fallback) instead of leaving nothing highlighted.
+    let (mut app, _sys, _dir) = focused("s12-esc-zero", &ABC);
+    press(&mut app, '/');
+    type_str(&mut app, "zzz");
+    assert_rendered(&mut app, &ABC, &[]);
+    esc(&mut app);
+    assert_lacks(&mut app, "Filter:");
+    assert_rendered(&mut app, &ABC, &ABC);
+    assert_highlighted(&mut app, &ABC, "a1.png");
+}
