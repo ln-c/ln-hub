@@ -257,6 +257,11 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
   - The slice that adds `j`/`k` in items: pick up the S3.1 deferral (key-conflict validation and
     an `Action` keymap table).
   - If `current_wallpaper` is reloaded (S6 / `tick`), reuse one private load fn in `ThemePane`.
+  - S6 (`j`/`k` in items): add `ThemePane::move_cursor(delta)` that clamps against the list
+    length, so `App` never touches the cursor.
+  - Incidental `wallpaper::read_current` behavior (accepted, not yet pinned by tests): only the
+    line terminator (`\n`/`\r`) is stripped, so a path's own trailing spaces are kept; an empty or
+    non-UTF-8 file means no current wallpaper.
 
 ### Slice 6
 - slice_id: S6-apply-wallpaper
