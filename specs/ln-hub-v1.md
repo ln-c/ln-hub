@@ -151,3 +151,6 @@ Each slice lives in its own file under `tasks/ln-hub-v1/` (front matter links ba
 | S13-bin | The binary: `--version`, real `ProcSystem`, terminal loop, sixel preview | [s13-bin.md](../tasks/ln-hub-v1/s13-bin.md) | green |
 | S14-picker-query | Terminal capability query with a hard deadline; no freeze, no eaten keys | [s14-picker-query.md](../tasks/ln-hub-v1/s14-picker-query.md) | green |
 | S15-monitor-popup | `Enter` on a monitor opens a confirm popup overlay | [s15-monitor-popup.md](../tasks/ln-hub-v1/s15-monitor-popup.md) | green |
+| S16-init-status | Status row shows `Initializing…` during the startup query, then `Ready` until the first key or ~1 s | [s16-init-status.md](../tasks/ln-hub-v1/s16-init-status.md) | planned |
+| S17-help-status-overlap | The right-aligned `Font:` status never overprints the help line or other left status text | [s17-help-status-overlap.md](../tasks/ln-hub-v1/s17-help-status-overlap.md) | planned |
+| S18-review-followups | S14/S15 review follow-ups: sturdier pty tests, sixel-reply pty test, popup and query-thread refactors | [s18-review-followups.md](../tasks/ln-hub-v1/s18-review-followups.md) | planned |
