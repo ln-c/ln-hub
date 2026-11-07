@@ -1,0 +1,65 @@
+//! What the app and the items panes say to each other: resolved keys, requested jobs, and the
+//! row cursor both panes share.
+
+use ratatui::crossterm::event::KeyCode;
+
+/// A key resolved to what it means outside a prompt.
+#[derive(Clone, Copy)]
+pub(crate) enum Action {
+    Quit,
+    Down,
+    Up,
+    Right,
+    Apply,
+    FontName,
+    FontSize,
+}
+
+impl Action {
+    pub(crate) fn from_key(code: KeyCode, quit_key: char) -> Option<Action> {
+        match code {
+            KeyCode::Char(c) if c == quit_key => Some(Action::Quit),
+            KeyCode::Char('j') => Some(Action::Down),
+            KeyCode::Char('k') => Some(Action::Up),
+            KeyCode::Char('l') => Some(Action::Right),
+            KeyCode::Char('f') => Some(Action::FontName),
+            KeyCode::Char('s') => Some(Action::FontSize),
+            KeyCode::Enter => Some(Action::Apply),
+            _ => None,
+        }
+    }
+}
+
+/// What a pane asks the app to do after a key.
+pub(crate) enum PaneAction {
+    /// Spawn the pane's program with `args` as the in-flight job, labelled `name`.
+    Spawn { args: Vec<String>, name: String },
+    /// Show `message` in the status bar.
+    Status(String),
+}
+
+/// The highlighted row of a list, kept inside the list.
+#[derive(Default)]
+pub(crate) struct Cursor(usize);
+
+impl Cursor {
+    pub(crate) fn at(row: usize) -> Cursor {
+        Cursor(row)
+    }
+
+    pub(crate) fn get(&self) -> usize {
+        self.0
+    }
+
+    /// Moves by `delta` rows within a list of `len` rows; does nothing when it is empty.
+    pub(crate) fn move_by(&mut self, delta: isize, len: usize) {
+        if let Some(last) = len.checked_sub(1) {
+            self.0 = self.0.saturating_add_signed(delta).min(last);
+        }
+    }
+
+    /// Pulls the cursor back onto the last row after the list shrank to `len` rows.
+    pub(crate) fn clamp(&mut self, len: usize) {
+        self.0 = self.0.min(len.saturating_sub(1));
+    }
+}
