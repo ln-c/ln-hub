@@ -334,6 +334,11 @@ Focus moves between columns with `h`/`l`. `j`/`k` move inside the focused column
     time.
   - Unpinned: when `fs::metadata` fails (e.g. a broken symlink), the size line is silently
     omitted.
+  - Unpinned: the unit rollover in `human_size` (e.g. 1048575 bytes → `1.0M`, not `1024K`).
+    Pin it if the sizing code is touched again.
+  - Optional nits: `preview_lines` could return the joined text (or `Vec<Line>`) instead of a
+    `Vec<String>` that `render_preview` joins; the `tests/s7_preview.rs` interior-rows comment
+    near `empty_list_preview_is_blank` slightly misdescribes the slice it takes.
 
 ### Slice 8
 - slice_id: S8-font
