@@ -1,0 +1,29 @@
+# S24 boot evidence (host /tmp/s24, 2026-11-08)
+
+## QEMU command line (arch-vm-tester HEADLESS=1 run.sh; note -snapshot)
+qemu-system-x86_64 -enable-kvm -m 2048 -smp 2 -machine q35 -cpu host -display none -snapshot -drive file=/home/ln/git/dotfiles/.agents/skills/arch-vm-tester/scripts/../vm_data/disk.qcow2,format=qcow2,if=virtio,file.locking=off -drive file=/home/ln/git/dotfiles/.agents/skills/arch-vm-tester/scripts/../vm_data/seed.iso,format=raw,if=virtio,readonly=on -netdev user,id=net0,hostfwd=tcp::2222-:22 -device virtio-net-pci,netdev=net0 -virtfs local,path=/home/ln/git/dotfiles,mount_tag=host_dotfiles,security_model=none,id=dotfiles -pidfile /home/ln/git/dotfiles/.agents/skills/arch-vm-tester/scripts/../vm_data/qemu-0.pid -daemonize 
+## Base disk stat before boot
+/home/ln/git/dotfiles/.agents/skills/arch-vm-tester/vm_data/disk.qcow2 2498494464 2026-10-10 09:50:40.819608134 +0700
+## Base disk stat after shutdown
+.agents/skills/arch-vm-tester/vm_data/disk.qcow2 2498494464 2026-10-10 09:50:40.819608134 +0700
+
+## Guest: copy from the 9p share, then sha256 (guest ~/.local/bin/ln-monitorctl before the copy: dfaae1421ad3a5d6230d6e3c04a61b9f6093dc973ecbffe9139b04c141279cc0, stale)
++ cp -f /home/ln/git/dotfiles/.local/bin/ln-askpass /home/ln/git/dotfiles/.local/bin/ln-brightnessctl /home/ln/git/dotfiles/.local/bin/ln-monitorctl /home/ln/git/dotfiles/.local/bin/ln-playerctl /home/ln/git/dotfiles/.local/bin/ln-themectl /home/ln/git/dotfiles/.local/bin/ln-wpctl /home/ln/.local/bin/
++ sha256sum /home/ln/.local/bin/ln-askpass /home/ln/.local/bin/ln-brightnessctl /home/ln/.local/bin/ln-monitorctl /home/ln/.local/bin/ln-playerctl /home/ln/.local/bin/ln-themectl /home/ln/.local/bin/ln-wpctl
+c0133071d29e18328d480d0f1a4d99695e355d59b7ad5d7ae784c25419909c75  /home/ln/.local/bin/ln-askpass
+53d07360a915384a3304592510aaaa9fd6aaa797322ef29c1bc91b2b2f05a516  /home/ln/.local/bin/ln-brightnessctl
+3062dfbf396bc62de7cf6fb26a75554b08147da6de44e34e8a272dbfd0867025  /home/ln/.local/bin/ln-monitorctl
+44c501bd45f7cdb2bcbeb5d2a0a3c77b0246b24165b6ba37984fca51a321fae4  /home/ln/.local/bin/ln-playerctl
+a16acab4b830d2c358f37c1b1251a37031aedfe2e2af96b556ad8195221b1c54  /home/ln/.local/bin/ln-themectl
+1816451b1e3b97ebaa9e9a631699486855f177e73b04fcff345ead3b249b78c5  /home/ln/.local/bin/ln-wpctl
+Linux arch-vm 7.2.7-arch1-1 #1 SMP PREEMPT_DYNAMIC Mon, 21 Sep 2026 18:51:14 +0000 x86_64 GNU/Linux
+Bats 1.14.0
+BOOT_IMAGE=/boot/vmlinuz-linux root=UUID=c7738ca7-0f44-4ed0-8da6-386a8d36048f rw net.ifnames=0 rootflags=compress=zstd:1 console=tty0 console=ttyS0,115200
+
+## Host: sha256sum ~/git/dotfiles/.local/bin/ln-*
+c0133071d29e18328d480d0f1a4d99695e355d59b7ad5d7ae784c25419909c75  ln-askpass
+53d07360a915384a3304592510aaaa9fd6aaa797322ef29c1bc91b2b2f05a516  ln-brightnessctl
+3062dfbf396bc62de7cf6fb26a75554b08147da6de44e34e8a272dbfd0867025  ln-monitorctl
+44c501bd45f7cdb2bcbeb5d2a0a3c77b0246b24165b6ba37984fca51a321fae4  ln-playerctl
+a16acab4b830d2c358f37c1b1251a37031aedfe2e2af96b556ad8195221b1c54  ln-themectl
+1816451b1e3b97ebaa9e9a631699486855f177e73b04fcff345ead3b249b78c5  ln-wpctl

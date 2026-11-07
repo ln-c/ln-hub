@@ -6,8 +6,9 @@
 //! a thread so the child never blocks on a write, and a child still alive at the end of a case is
 //! killed by `wait_exit` (no hang).
 
+use std::ffi::OsString;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -22,6 +23,7 @@ pub struct Session {
     child: Box<dyn Child + Send + Sync>,
     writer: Box<dyn Write + Send>,
     out: Arc<Mutex<Vec<u8>>>,
+    home: PathBuf,
     // Keeps the master (and so the pty) alive for the whole session.
     _master: Box<dyn portable_pty::MasterPty + Send>,
 }
@@ -34,8 +36,19 @@ impl Session {
     /// Like `spawn`, but `setup` runs on the fresh HOME before the binary starts (to put files in
     /// it, e.g. a wallpaper).
     pub fn spawn_with_home(name: &str, setup: impl FnOnce(&Path)) -> Session {
+        Session::spawn_with_env(name, setup, |_| Vec::new())
+    }
+
+    /// Like `spawn_with_home`, but the binary also gets the env vars `envs` returns; `envs`
+    /// receives the HOME path (so a var can point at a file under it).
+    pub fn spawn_with_env(
+        name: &str,
+        setup: impl FnOnce(&Path),
+        envs: impl FnOnce(&Path) -> Vec<(String, OsString)>,
+    ) -> Session {
         let home = tempdir(&format!("{name}-home"));
         setup(&home);
+        let extra = envs(&home);
         let empty_path = tempdir(&format!("{name}-path"));
         let pair = native_pty_system()
             .openpty(PtySize {
@@ -50,6 +63,9 @@ impl Session {
         cmd.env("PATH", &empty_path);
         cmd.env("TERM", "xterm-256color");
         cmd.env_remove("XDG_CONFIG_HOME");
+        for (key, value) in extra {
+            cmd.env(key, value);
+        }
         cmd.cwd(Path::new(&home));
         let child = pair.slave.spawn_command(cmd).expect("spawn ln-hub in pty");
         drop(pair.slave);
@@ -70,8 +86,14 @@ impl Session {
             child,
             writer,
             out,
+            home,
             _master: pair.master,
         }
+    }
+
+    /// The session's HOME (a fresh temp dir).
+    pub fn home(&self) -> &Path {
+        &self.home
     }
 
     pub fn output(&self) -> Vec<u8> {
@@ -112,13 +134,15 @@ impl Session {
     /// window. Panics, killing the child, if it never shows.
     pub fn wait_ready(&mut self) {
         if !self.wait_for(b"Ready", FRAME_TIMEOUT) {
-            let out = self.output();
-            let _ = self.wait_exit(Duration::ZERO);
-            panic!(
-                "no `Ready` within {FRAME_TIMEOUT:?}; output tail: {:?}",
-                tail(&out)
-            );
+            self.fail(&format!("no `Ready` within {FRAME_TIMEOUT:?}"));
         }
+    }
+
+    /// Kills the child, then panics with `msg` and the output tail (no process is left behind).
+    pub fn fail(&mut self, msg: &str) -> ! {
+        let out = self.output();
+        let _ = self.wait_exit(Duration::ZERO);
+        panic!("{msg}; output tail: {:?}", tail(&out));
     }
 
     pub fn send(&mut self, bytes: &[u8]) {
@@ -146,12 +170,17 @@ impl Session {
     }
 }
 
+/// Byte offset of the first `needle` in `hay`, if present (an empty needle is at 0).
+pub fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    hay.windows(needle.len()).position(|w| w == needle)
+}
+
 /// Whether `needle` occurs in `hay` (an empty needle occurs everywhere).
 pub fn contains(hay: &[u8], needle: &[u8]) -> bool {
-    if needle.is_empty() {
-        return true;
-    }
-    hay.windows(needle.len()).any(|w| w == needle)
+    find(hay, needle).is_some()
 }
 
 /// The last 160 bytes of the output, lossy, for failure messages (the full frame is noise).

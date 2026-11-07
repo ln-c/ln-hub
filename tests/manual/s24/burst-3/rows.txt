@@ -1,0 +1,4 @@
+  1291.9 ms     effect 'l' |                                                                                                                                        Font: Terminess Nerd Font Propo, size 15|
+  1711.0 ms     effect '?' |h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  q quit                                                        Font: Terminess Nerd Font Propo, size 15|
+  1738.5 ms     effect 'j' |h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  q quit                                                        Font: Terminess Nerd Font Propo, size 15|
+  2092.6 ms     effect 'k' |h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  q quit                                                        Font: Terminess Nerd Font Propo, size 15|

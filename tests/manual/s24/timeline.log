@@ -1,0 +1,29 @@
+     0.1 ms  spawn cmd=['env', 'LN_HUB_TIMING=/tmp/ev/burst1/timing.log', '/tmp/ln-hub'] winsize=43x176 silent=False
+    13.5 ms  EVENT init: status row shows Initializing…
+    15.0 ms  stdin->child b'\x1b[6;16;7t\x1b[?62;4;22;28;52c'
+    57.5 ms  EVENT ready: status row shows Ready
+  1059.9 ms  EVENT readygone: Ready cleared (1002 ms after Ready)
+  1261.7 ms  ACTION key 'l' (after readygone+200.0ms)
+  1268.6 ms  KEY sent 'l'
+  1288.4 ms  EFFECT key 'l' +20.7 ms after send; rows changed [1, 2, 3, 4, 42]; last row |                                                                                                                                        Font: Terminess Nerd Font Propo, size 15|
+  1686.6 ms  FAST window 1 open (chunk gap 10.3 ms, last key 418.6 ms ago)
+  1690.4 ms  ACTION key '?' (after fast1+0.0ms)
+  1693.4 ms  KEY sent '?'
+  1702.6 ms  EFFECT key '?' +9.0 ms after send; rows changed [42]; last row |h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  q quit                                                        Font: Terminess Nerd Font Propo, size 15|
+  1709.7 ms  ACTION key 'j' (after fast1+20.0ms)
+  1713.5 ms  KEY sent 'j'
+  1726.2 ms  EFFECT key 'j' +11.1 ms after send; rows changed [1, 2]; last row |h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  q quit                                                        Font: Terminess Nerd Font Propo, size 15|
+  1833.0 ms  FAST window 1 closed (gap 97.2 ms)
+  2149.7 ms  FAST window 2 open (chunk gap 10.2 ms, last key 437.8 ms ago)
+  2153.1 ms  ACTION key 'k' (after fast2+0.0ms)
+  2158.1 ms  KEY sent 'k'
+  2158.2 ms  SIXEL start in output chunk (4095 bytes)
+  2158.2 ms  FAST window 2 closed (sixel)
+  2168.7 ms  EFFECT key 'k' +11.7 ms after send; rows changed [1, 2]; last row |h/j/k/l move  gg/G top/bottom  ⏎ apply  / filter  f font  s size  ? help  q quit                                                        Font: Terminess Nerd Font Propo, size 15|
+  2203.9 ms  FAST window 3 open (chunk gap 5.4 ms, last key 47.2 ms ago)
+  2305.6 ms  FAST window 3 closed (gap 101.8 ms)
+  3650.9 ms  ACTION dump 'final' (after fast2+1500.0ms)
+  3652.7 ms  ACTION grim 'final' (after fast2+1500.0ms)
+  4654.7 ms  ACTION sh 'pkill -x ln-hub' (after fast2+2500.0ms)
+  4667.2 ms  child exited status=None
+  4667.2 ms  child exit status=15

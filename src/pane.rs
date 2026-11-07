@@ -70,14 +70,17 @@ pub(crate) enum Program {
     Monitorctl,
 }
 
+/// A helper job to spawn: `program` with `args`, labelled `name` in the status bar.
+pub(crate) struct SpawnJob {
+    pub(crate) program: Program,
+    pub(crate) args: Vec<String>,
+    pub(crate) name: String,
+}
+
 /// What a pane asks the app to do after a key.
 pub(crate) enum PaneAction {
-    /// Spawn `program` with `args` as the in-flight job, labelled `name`.
-    Spawn {
-        program: Program,
-        args: Vec<String>,
-        name: String,
-    },
+    /// Spawn the job as the in-flight job.
+    Spawn(SpawnJob),
     /// Show `message` in the status bar.
     Status(String),
 }

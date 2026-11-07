@@ -1,0 +1,9 @@
+# bare1 (foot, no proxy): ln-hub straight in foot 176x43, l via Hyprland send_shortcut
+encode 102x30 55.7ms
+draw 15.7ms
+# bare2 (foot, no proxy): ln-hub straight in foot 176x43, l via Hyprland send_shortcut
+encode 102x30 51.2ms
+draw 13.6ms
+# bare3 (foot, no proxy): ln-hub straight in foot 176x43, l via Hyprland send_shortcut
+encode 102x30 35.7ms
+draw 8.7ms

@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, Clear, List, ListItem, ListState, Padding, Paragra
 use crate::config::{Config, Module};
 use crate::monitor::MonitorsPane;
 use crate::palette::LivePalette;
-use crate::pane::{Action, PaneAction, Program, TOP_PREFIX};
+use crate::pane::{Action, PaneAction, Program, SpawnJob, TOP_PREFIX};
 use crate::popup::{Popup, PopupNext};
 use crate::system::{JobId, JobState, System};
 use crate::theme_pane::{PreviewImage, ThemePane};
@@ -109,7 +109,7 @@ impl App {
             match popup.on_key(key.code, self.quit_key) {
                 PopupNext::Keep(popup) => self.popup = Some(popup),
                 PopupNext::Close => {}
-                PopupNext::Confirm(action) => self.run(Some(action)),
+                PopupNext::Confirm(job) => self.run(Some(PaneAction::Spawn(job))),
             }
             return;
         }
@@ -330,11 +330,11 @@ impl App {
     /// Carries out what the focused pane asked for.
     fn run(&mut self, action: Option<PaneAction>) {
         match action {
-            Some(PaneAction::Spawn {
+            Some(PaneAction::Spawn(SpawnJob {
                 program,
                 args,
                 name,
-            }) => {
+            })) => {
                 let (prog, on_done) = match program {
                     Program::Themectl => (THEMECTL, OnDone::ReloadTheme),
                     Program::Monitorctl => (MONITORCTL, OnDone::ReloadMonitors),
