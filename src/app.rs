@@ -89,7 +89,10 @@ impl App {
                 self.focus_items();
                 None
             }
-            (Some(_), Action::Left) => {
+            (Some(module), Action::Left) => {
+                if module == Module::Theme {
+                    self.theme.clear_filter();
+                }
                 self.items_focused = false;
                 None
             }

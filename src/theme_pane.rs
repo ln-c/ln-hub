@@ -69,6 +69,7 @@ fn preview_lines(w: &Wallpaper) -> Vec<String> {
 enum PromptKind {
     FontName,
     FontSize,
+    Filter,
 }
 
 /// A text prompt open in the status row; typed characters go to it until Enter or Esc.
@@ -89,26 +90,24 @@ impl Prompt {
         let label = match self.kind {
             PromptKind::FontName => "Font name",
             PromptKind::FontSize => "Font size",
+            PromptKind::Filter => "Filter",
         };
         format!("{label}: {}", self.text)
     }
 
     /// The `ln-themectl` job the text asks for; `None` for an empty name.
     fn command(&self) -> Option<PaneAction> {
-        let (flag, value) = match self.kind {
-            PromptKind::FontName => ("-f", self.text.trim().to_owned()),
+        let (flag, label, value) = match self.kind {
+            PromptKind::FontName => ("-f", "font name", self.text.trim().to_owned()),
             PromptKind::FontSize => match font::parse_size(&self.text) {
-                Some(size) => ("-s", size.to_string()),
+                Some(size) => ("-s", "font size", size.to_string()),
                 None => return Some(PaneAction::Status(font::FONT_SIZE_ERROR.to_owned())),
             },
+            PromptKind::Filter => return None,
         };
         if value.is_empty() {
             return None;
         }
-        let label = match self.kind {
-            PromptKind::FontName => "font name",
-            PromptKind::FontSize => "font size",
-        };
         Some(PaneAction::Spawn {
             name: format!("{label} {value}"),
             args: vec![flag.to_owned(), value],
@@ -123,9 +122,12 @@ pub(crate) struct ThemePane {
     current_file: PathBuf,
     /// Path of the applied wallpaper, marked with `●` when it is in the list.
     current: Option<PathBuf>,
-    /// Index into `wallpapers` of the highlighted row; starts on the applied wallpaper.
+    /// Index into the visible (filtered) rows of the highlighted row; starts on the applied
+    /// wallpaper.
     cursor: Cursor,
-    /// The open font prompt; it takes every key until closed.
+    /// Text the wallpaper names must contain (case-insensitively); empty shows every row.
+    filter: String,
+    /// The open prompt; it takes every key until closed.
     prompt: Option<Prompt>,
     /// Hyprland env file that records the font, re-read by `reload`.
     env_file: PathBuf,
@@ -149,6 +151,7 @@ impl ThemePane {
             current_file: current_file.to_path_buf(),
             current,
             cursor,
+            filter: String::new(),
             prompt: None,
             env_file: env_file.to_path_buf(),
             font: Font::load(env_file),
@@ -167,16 +170,37 @@ impl ThemePane {
         self.font.summary()
     }
 
-    /// The wallpaper under the cursor; `None` when the list is empty.
+    /// The wallpapers whose name matches the filter, in list order.
+    fn visible(&self) -> Vec<&Wallpaper> {
+        let needle = self.filter.to_lowercase();
+        self.wallpapers
+            .iter()
+            .filter(|w| w.name.to_lowercase().contains(&needle))
+            .collect()
+    }
+
+    /// The wallpaper under the cursor; `None` when no row is visible.
     pub(crate) fn selected(&self) -> Option<&Wallpaper> {
-        self.wallpapers.get(self.cursor.get())
+        self.visible().get(self.cursor.get()).copied()
+    }
+
+    /// Drops the filter, keeping the highlighted wallpaper highlighted.
+    pub(crate) fn clear_filter(&mut self) {
+        let path = self.selected().map(|w| w.path.clone());
+        self.filter.clear();
+        self.cursor = Cursor::at(
+            path.and_then(|p| self.wallpapers.iter().position(|w| w.path == p))
+                .unwrap_or(0),
+        );
     }
 
     /// Handles a key while the Theme items are focused and no prompt is open.
     pub(crate) fn handle(&mut self, action: Action) -> Option<PaneAction> {
         match action {
-            Action::Down => self.cursor.move_by(1, self.wallpapers.len()),
-            Action::Up => self.cursor.move_by(-1, self.wallpapers.len()),
+            Action::Down => self.cursor.move_by(1, self.visible().len()),
+            Action::Up => self.cursor.move_by(-1, self.visible().len()),
+            Action::Filter => self.prompt = Some(Prompt::new(PromptKind::Filter)),
+            Action::Cancel => self.clear_filter(),
             Action::Apply => return self.apply_selected(),
             Action::FontName => self.prompt = Some(Prompt::new(PromptKind::FontName)),
             Action::FontSize => self.prompt = Some(Prompt::new(PromptKind::FontSize)),
@@ -204,14 +228,25 @@ impl ThemePane {
     /// false) the prompt stays open with its text.
     pub(crate) fn handle_prompt_key(&mut self, code: KeyCode, idle: bool) -> Option<PaneAction> {
         let prompt = self.prompt.as_mut()?;
+        let filtering = matches!(prompt.kind, PromptKind::Filter);
         match code {
             KeyCode::Char(c) => prompt.text.push(c),
             KeyCode::Backspace => {
                 prompt.text.pop();
             }
-            KeyCode::Esc => self.prompt = None,
+            KeyCode::Esc => {
+                self.prompt = None;
+                if filtering {
+                    self.clear_filter();
+                }
+            }
+            KeyCode::Enter if filtering => self.prompt = None,
             KeyCode::Enter if idle => return self.prompt.take()?.command(),
             _ => {}
+        }
+        if filtering && let Some(prompt) = &self.prompt {
+            self.filter.clone_from(&prompt.text);
+            self.cursor = Cursor::at(0);
         }
         None
     }
@@ -236,8 +271,8 @@ impl ThemePane {
             return;
         }
         let rows: Vec<ListItem> = self
-            .wallpapers
-            .iter()
+            .visible()
+            .into_iter()
             .map(|w| {
                 let mark = if is_current(self.current.as_deref(), w) {
                     CURRENT_MARK

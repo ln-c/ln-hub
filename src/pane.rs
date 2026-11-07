@@ -14,6 +14,8 @@ pub(crate) enum Action {
     Apply,
     FontName,
     FontSize,
+    Filter,
+    Cancel,
 }
 
 /// The built-in character keys. `quit` may not take any of these (nor [`FILTER_KEY`]).
@@ -26,13 +28,15 @@ const CHAR_KEYS: [(char, Action); 6] = [
     ('s', Action::FontSize),
 ];
 
-/// Reserved for the items filter, which is not bound yet.
+/// Opens the Theme items filter.
 const FILTER_KEY: char = '/';
 
 impl Action {
     pub(crate) fn from_key(code: KeyCode, quit_key: char) -> Option<Action> {
         match code {
             KeyCode::Char(c) if c == quit_key => Some(Action::Quit),
+            KeyCode::Char(FILTER_KEY) => Some(Action::Filter),
+            KeyCode::Esc => Some(Action::Cancel),
             KeyCode::Char(c) => CHAR_KEYS.iter().find(|(k, _)| *k == c).map(|(_, a)| *a),
             KeyCode::Down => Some(Action::Down),
             KeyCode::Up => Some(Action::Up),
