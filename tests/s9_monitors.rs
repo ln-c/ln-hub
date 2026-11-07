@@ -11,7 +11,7 @@ use std::fs;
 use std::io;
 
 use common::*;
-use ln_hub::{App, Config};
+use ln_hub::{App, Config, JobState};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -228,6 +228,158 @@ fn monitors_view_shows_neither_the_font_line_nor_the_wallpaper_list() {
             !lines.iter().any(|l| l.contains(text)),
             "`{text}` must not be shown in the Monitors view; buffer:\n{}",
             dump(&buf)
+        );
+    }
+}
+
+/// App with the given keys pressed in order; the wallpaper dir holds img1.png / img2.png.
+fn app_after_keys(name: &str, sys: &FakeSystem, keys: &[char]) -> App {
+    let home = tempdir(&format!("{name}-home"));
+    let dir = tempdir(&format!("{name}-wall"));
+    for n in ["img1.png", "img2.png"] {
+        fs::write(dir.join(n), b"x").unwrap();
+    }
+    let mut cfg = Config::default_for(&home);
+    cfg.wallpaper_dir = dir;
+    let mut app = App::new(cfg, Box::new(sys.clone()));
+    for &c in keys {
+        app.handle_key(key(KeyCode::Char(c)));
+    }
+    app
+}
+
+fn hyprctl_runs(sys: &FakeSystem) -> usize {
+    sys.run_calls()
+        .iter()
+        .filter(|(prog, _)| prog == "hyprctl")
+        .count()
+}
+
+fn shows(app: &mut App, text: &str) -> bool {
+    buffer_lines(&draw(app)).iter().any(|l| l.contains(text))
+}
+
+#[test]
+fn open_prompt_survives_a_job_finishing_and_status_shows_after_esc() {
+    // Catches: tick closing/clobbering an open prompt (or typed text) when the in-flight font job
+    // finishes, or the "Applied ..." status being lost instead of shown once the prompt closes.
+    let sys = FakeSystem::new();
+    let mut a = app_after_keys("s9-prompt-tick", &sys, &['l']); // Theme items focused
+    sys.set_job_state(JobState::Running);
+    for c in ['s', '1', '8'] {
+        a.handle_key(key(KeyCode::Char(c)));
+    }
+    a.handle_key(key(KeyCode::Enter));
+    assert_eq!(sys.spawn_calls().len(), 1, "font size job must be spawned");
+
+    a.handle_key(key(KeyCode::Char('f')));
+    for c in "Zed".chars() {
+        a.handle_key(key(KeyCode::Char(c)));
+    }
+    sys.set_job_state(JobState::Done);
+    a.tick();
+    let buf = draw(&mut a);
+    assert!(
+        buffer_lines(&buf)
+            .iter()
+            .any(|l| l.contains("Font name: Zed")),
+        "prompt `Font name: Zed` must stay open after tick; buffer:\n{}",
+        dump(&buf)
+    );
+
+    a.handle_key(key(KeyCode::Esc));
+    let buf = draw(&mut a);
+    assert!(
+        buffer_lines(&buf)
+            .iter()
+            .any(|l| l.contains("Applied font size 18")),
+        "`Applied font size 18` must show after Esc; buffer:\n{}",
+        dump(&buf)
+    );
+    assert!(!buffer_lines(&buf).iter().any(|l| l.contains("Font name:")));
+}
+
+#[test]
+fn unparseable_hyprctl_output_shows_unavailable() {
+    // Catches: treating non-JSON stdout as an empty list (blank column) or panicking on it.
+    let sys = FakeSystem::new();
+    sys.set_stdout("hyprctl", "not json");
+    let mut a = monitors_app("s9-garbage", &sys);
+    let buf = draw(&mut a);
+    assert!(
+        row_in_items(&buf, UNAVAILABLE).is_some(),
+        "`{UNAVAILABLE}` not in the items column; buffer:\n{}",
+        dump(&buf)
+    );
+}
+
+#[test]
+fn hyprctl_is_not_run_before_l_on_monitors_nor_when_l_focuses_theme() {
+    // Catches: querying hyprctl eagerly (in App::new, on `j` selection, or on render) or when
+    // `l` focuses a module other than Monitors.
+    let sys = FakeSystem::new();
+    sys.set_stdout("hyprctl", MONITORS_JSON);
+
+    let mut on_monitors = app_after_keys("s9-lazy-mon", &sys, &['j']);
+    draw(&mut on_monitors);
+    assert_eq!(hyprctl_runs(&sys), 0, "no hyprctl before `l` on Monitors");
+    on_monitors.handle_key(key(KeyCode::Char('l')));
+    assert_eq!(
+        hyprctl_runs(&sys),
+        1,
+        "`l` on Monitors queries exactly once"
+    );
+
+    let sys = FakeSystem::new();
+    sys.set_stdout("hyprctl", MONITORS_JSON);
+    let mut on_theme = app_after_keys("s9-lazy-theme", &sys, &['l']);
+    draw(&mut on_theme);
+    assert_eq!(hyprctl_runs(&sys), 0, "`l` on Theme must not run hyprctl");
+}
+
+#[test]
+fn pressing_l_again_on_monitors_requeries_hyprctl() {
+    // Catches: caching the first monitor list (second `l` not refreshing after a hotplug).
+    let sys = FakeSystem::new();
+    sys.set_stdout("hyprctl", MONITORS_JSON);
+    let mut a = monitors_app("s9-requery", &sys);
+    assert!(row_in_items(&draw(&mut a), EDP_ROW).is_some());
+
+    sys.set_stdout(
+        "hyprctl",
+        r#"[{"name": "HDMI-A-1", "width": 1920, "height": 1080, "refreshRate": 60.0, "disabled": false}]"#,
+    );
+    a.handle_key(key(KeyCode::Char('l')));
+    let buf = draw(&mut a);
+    assert!(
+        row_in_items(&buf, "HDMI-A-1  1920x1080@60  on").is_some(),
+        "new monitor row missing after second `l`; buffer:\n{}",
+        dump(&buf)
+    );
+    assert!(
+        row_in_items(&buf, EDP_ROW).is_none(),
+        "stale row still shown; buffer:\n{}",
+        dump(&buf)
+    );
+}
+
+#[test]
+fn f_s_and_enter_do_nothing_on_monitors() {
+    // Catches: Theme-only keys (font prompts, apply wallpaper) firing while Monitors items are
+    // focused, e.g. a guard on `items_focused` alone instead of "Theme items focused".
+    for k in [KeyCode::Char('f'), KeyCode::Char('s'), KeyCode::Enter] {
+        let sys = FakeSystem::new();
+        sys.set_stdout("hyprctl", MONITORS_JSON);
+        let mut a = monitors_app("s9-theme-keys", &sys);
+        a.handle_key(key(k));
+        assert!(
+            !shows(&mut a, "Font name:") && !shows(&mut a, "Font size:"),
+            "{k:?} must not open a prompt on Monitors"
+        );
+        assert!(
+            sys.spawn_calls().is_empty(),
+            "{k:?} must not spawn on Monitors: {:?}",
+            sys.spawn_calls()
         );
     }
 }

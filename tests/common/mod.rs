@@ -57,11 +57,11 @@ impl FakeSystem {
             .push((prog.to_string(), kind, msg.to_string()));
     }
 
+    /// Sets the canned stdout of `prog`, replacing any earlier value for it.
     pub fn set_stdout(&self, prog: &str, out: &str) {
-        self.stdout
-            .lock()
-            .unwrap()
-            .push((prog.to_string(), out.to_string()));
+        let mut canned = self.stdout.lock().unwrap();
+        canned.retain(|(p, _)| p != prog);
+        canned.push((prog.to_string(), out.to_string()));
     }
 
     pub fn set_job_state(&self, s: JobState) {
